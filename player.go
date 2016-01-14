@@ -31,7 +31,12 @@ func (p *Player) HandlePacket(b *buffer.Buffer) (err error) {
 		return err
 	}
 	switch pid {
-	case 0x8f:
+	case 0x93: // TextPacket
+		if b.ReadByte() == 1 { // Type: chat
+			b.ReadString()
+		}
+		p.SendMessage("<" + p.Username + "> " + b.ReadString())
+	case 0x8f: // LoginPacket
 		if p.loggedIn {
 			return
 		}
@@ -39,22 +44,25 @@ func (p *Player) HandlePacket(b *buffer.Buffer) (err error) {
 			p.disconnect("Server is full!")
 		}
 		p.Username = b.ReadString()
-		proto := b.ReadInt()
+
+		proto := b.ReadInt()                  // Protocol version check
+		buf := buffer.FromBytes([]byte{0x90}) // PlayStatusPacket
 		if proto > raknet.MinecraftProtocol {
-			buf := buffer.FromBytes([]byte{0x90}) // LoginStatusPacket
-			buf.WriteInt(2)                       // Failed by server
-			p.sendPacket(buf)
+			buf.WriteInt(2) // Failed by server
+			p.send(buf)
 			p.disconnect("Outdated server")
 			return nil
 		} else if proto < raknet.MinecraftProtocol {
-			buf := buffer.FromBytes([]byte{0x90}) // LoginStatusPacket
+			buf := buffer.FromBytes([]byte{0x90}) // PlayStatusPacket
 			buf.WriteInt(1)                       // Failed by client
-			p.sendPacket(buf)
+			p.send(buf)
 			p.disconnect("Outdated client")
 			return nil
 		}
-		p.disconnect("Success")
-		b.Read(4)
+		buf.WriteInt(0) // Success
+		p.send(buf)
+
+		b.Read(4) // Skip proto2
 		p.ClientID = b.ReadLong()
 		var uuid []byte
 		uuid = b.Read(16)
@@ -63,6 +71,24 @@ func (p *Player) HandlePacket(b *buffer.Buffer) (err error) {
 		p.ClientSecret = b.ReadString()
 		p.SkinName = b.ReadString()
 
+		buf = buffer.FromBytes([]byte("\x95\xff\xff\xff\xff\x00")) // StartGamePacket (seed -1, dimension 0)
+		buf.WriteInt(1)                                            // Generator - 0: old, 1: infinite, 2: flat
+		buf.WriteInt(1)                                            // 0: Survival, 1: Creative
+		buf.WriteLong(0)                                           // Player eid is forced to be zero
+		buf.WriteInt(0)                                            // Spawnpoint X
+		buf.WriteInt(64)                                           // Spawnpoint Y
+		buf.WriteInt(0)                                            // Spawnpoint Z
+		buf.WriteFloat(0)                                          // X
+		buf.WriteFloat(64)                                         // Y
+		buf.WriteFloat(0)                                          // Z
+		buf.WriteByte(0)                                           // Unknown
+		p.send(buf)
+
+		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
+
+		p.firstSpawn()
+		fmt.Println(p.Username + " joined the game")
+		p.SendMessage("Hell-O from the server!")
 	case 0x92: // BatchPacket
 		size := b.ReadInt()
 		payload := b.Read(uint64(size))
@@ -88,27 +114,38 @@ func (p *Player) HandlePacket(b *buffer.Buffer) (err error) {
 	return nil
 }
 
+// SendMessage sends text to player.
+func (p *Player) SendMessage(msg string) {
+	buf := buffer.FromBytes([]byte{0x93}) // TextPacket
+	buf.WriteByte(0)                      // Type: Raw
+	buf.WriteString(msg)
+	p.send(buf)
+}
+
+func (p *Player) firstSpawn() {
+	buf := buffer.FromBytes([]byte{0x90}) // PlayStatusPacket
+	buf.WriteInt(3)                       // Player spawn
+	p.send(buf)
+}
+
 // Kick kicks player from server.
 func (p *Player) Kick(reason string) {
-
+	p.disconnect("Kicked: " + reason)
 }
 
 func (p *Player) disconnect(msg string) {
 	buf := buffer.FromBytes([]byte{0x91})
 	buf.WriteString(msg)
-	p.sendPacket(buf)
+	p.send(buf)
 	raknet.Sessions[p.Address.String()].Close("disconnected from server: " + msg)
 }
 
-func (p *Player) sendPacket(buf *buffer.Buffer) {
+func (p *Player) send(buf *buffer.Buffer) {
 	if session, ok := raknet.Sessions[p.Address.String()]; ok {
 		ep := new(raknet.EncapsulatedPacket)
 		ep.Reliability = 2
 		ep.Buffer = buf
 		ep.Buffer.Offset = 0
 		session.SendEncapsulated(ep)
-	} else {
-		fmt.Println("Oops?", p.Address.String())
-		fmt.Println(raknet.Sessions)
 	}
 }

@@ -11,7 +11,8 @@ import (
 func AddPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) {
 	identifier := addr.String()
 	if _, ok := Players[identifier]; ok {
-		panic("Duplicate player identifier " + identifier)
+		fmt.Println("Duplicate authentication from", addr)
+		Players[identifier].(*Player).disconnect("Logged in from another location")
 	}
 	p := new(Player)
 	p.Address = addr
