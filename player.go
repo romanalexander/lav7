@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/L7-MCPE/lav7/level"
+	"github.com/L7-MCPE/lav7/level/format/dummy"
 	"github.com/L7-MCPE/raknet"
 	"github.com/L7-MCPE/util"
 	"github.com/L7-MCPE/util/buffer"
@@ -19,107 +21,116 @@ type Player struct {
 	ClientSecret  string
 	Skin          []byte
 	SkinName      string
-	x, y, z       float64
+	x, y, z       float32
 	loggedIn      bool
 	closed        bool
 }
 
 // HandlePacket handles received MCPE packet after raknet connection is established.
 func (p *Player) HandlePacket(b *buffer.Buffer) (err error) {
-	pid := b.ReadByte()
-	if err != nil {
-		return err
+	pid := b.Payload[0]
+	b.Offset = 1
+	var pk Packet
+	if pk = GetPacket(pid); pk == nil {
+		return
 	}
-	switch pid {
-	case 0x93: // TextPacket
-		if b.ReadByte() == 1 { // Type: chat
-			b.ReadString()
-		}
-		p.SendMessage("<" + p.Username + "> " + b.ReadString())
-	case 0x8f: // LoginPacket
+	pk.Read(b)
+	return p.handleDataPacket(pk)
+}
+
+func (p *Player) handleDataPacket(pk Packet) (err error) {
+	switch pk.(type) {
+	case *Login:
+		pk := pk.(*Login)
 		if p.loggedIn {
 			return
 		}
 		if len(Players) >= raknet.MaxPlayers {
 			p.disconnect("Server is full!")
 		}
-		p.Username = b.ReadString()
+		p.Username = pk.Username
 
-		proto := b.ReadInt()                  // Protocol version check
 		buf := buffer.FromBytes([]byte{0x90}) // PlayStatusPacket
-		if proto > raknet.MinecraftProtocol {
+		if pk.Proto1 > raknet.MinecraftProtocol {
 			buf.WriteInt(2) // Failed by server
 			p.send(buf)
 			p.disconnect("Outdated server")
-			return nil
-		} else if proto < raknet.MinecraftProtocol {
+			return
+		} else if pk.Proto1 < raknet.MinecraftProtocol {
 			buf := buffer.FromBytes([]byte{0x90}) // PlayStatusPacket
 			buf.WriteInt(1)                       // Failed by client
 			p.send(buf)
 			p.disconnect("Outdated client")
-			return nil
+			return
 		}
 		buf.WriteInt(0) // Success
 		p.send(buf)
 
-		b.Read(4) // Skip proto2
-		p.ClientID = b.ReadLong()
-		var uuid []byte
-		uuid = b.Read(16)
-		copy(p.ClientUUIDRaw[:], uuid)
-		b.ReadString() // Skip sever address field
-		p.ClientSecret = b.ReadString()
-		p.SkinName = b.ReadString()
+		p.ClientID = pk.ClientID
+		p.ClientUUIDRaw = pk.RawUUID
+		p.ClientSecret = pk.ClientSecret
+		p.SkinName = pk.SkinName
+		p.Skin = pk.Skin
 
-		buf = buffer.FromBytes([]byte("\x95\xff\xff\xff\xff\x00")) // StartGamePacket (seed -1, dimension 0)
-		buf.WriteInt(1)                                            // Generator - 0: old, 1: infinite, 2: flat
-		buf.WriteInt(1)                                            // 0: Survival, 1: Creative
-		buf.WriteLong(0)                                           // Player eid is forced to be zero
-		buf.WriteInt(0)                                            // Spawnpoint X
-		buf.WriteInt(64)                                           // Spawnpoint Y
-		buf.WriteInt(0)                                            // Spawnpoint Z
-		buf.WriteFloat(0)                                          // X
-		buf.WriteFloat(64)                                         // Y
-		buf.WriteFloat(0)                                          // Z
-		buf.WriteByte(0)                                           // Unknown
-		p.send(buf)
+		p.SendPacket(&StartGame{
+			Seed:      0xffffffff, // -1
+			Dimension: 0,
+			Generator: 1, // 0: old, 1: infinite, 2: flat
+			Gamemode:  1, // 0: Survival, 1: Creative
+			EntityID:  0, // Player eid set to 0
+			SpawnX:    0,
+			SpawnY:    120,
+			SpawnZ:    0,
+			X:         0,
+			Y:         120,
+			Z:         0,
+		})
 
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
-
+		for x := int32(-5); x <= 5; x++ {
+			for z := int32(-5); z <= 5; z++ {
+				p.SendChunk(x, z, dummy.DummyChunk)
+			}
+		}
 		p.firstSpawn()
 		fmt.Println(p.Username + " joined the game")
-		p.SendMessage("Hell-O from the server!")
-	case 0x92: // BatchPacket
-		size := b.ReadInt()
-		payload := b.Read(uint64(size))
-		b, err := util.DecodeDeflate(payload)
-		if err != nil {
-			return err
-		}
-		buf := buffer.FromBytes(b)
-		for buf.Require(4) {
-			size := buf.ReadInt()
-			b := buf.Read(uint64(size))
-			if b[0] == 0x92 {
-				return fmt.Errorf("Invalid BatchPacket inside BatchPacket")
-			}
-			if err := p.HandlePacket(buffer.FromBytes(b)); err != nil {
-				return err
+		p.SendMessage("Hello, this is lav7 test server!")
+	case *Batch:
+		pk := pk.(*Batch)
+		for _, pp := range pk.Payloads {
+			if err = p.HandlePacket(buffer.FromBytes(pp)); err != nil {
+				return
 			}
 		}
+	case *Text:
+		pk := pk.(*Text)
+		if pk.TextType == TextTypeTranslation {
+			return
+		}
+		p.SendMessage("Echo from: " + pk.Message)
 	default:
-		util.Debug("Unimplemented!")
-		fmt.Print(hex.Dump(b.Payload))
+		util.Debug("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented: " + fmt.Sprint(pk))
 	}
-	return nil
+	return
 }
 
 // SendMessage sends text to player.
 func (p *Player) SendMessage(msg string) {
-	buf := buffer.FromBytes([]byte{0x93}) // TextPacket
-	buf.WriteByte(0)                      // Type: Raw
-	buf.WriteString(msg)
-	p.send(buf)
+	p.SendPacket(&Text{
+		TextType: TextTypeRaw,
+		Message:  msg,
+	})
+}
+
+// SendChunk sends given Chunk struct to client.
+func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
+	i := &FullChunkData{
+		ChunkX:  uint32(chunkX),
+		ChunkZ:  uint32(chunkZ),
+		Order:   1,
+		Payload: c.FullChunkData(),
+	}
+	p.SendCompressed(i)
 }
 
 func (p *Player) firstSpawn() {
@@ -138,6 +149,24 @@ func (p *Player) disconnect(msg string) {
 	buf.WriteString(msg)
 	p.send(buf)
 	raknet.Sessions[p.Address.String()].Close("disconnected from server: " + msg)
+}
+
+// SendPacket sends given packet to client.
+func (p *Player) SendPacket(pk Packet) {
+	buf := buffer.FromBytes([]byte{pk.Pid()})
+	buf.Write(pk.Write().Done())
+	p.send(buf)
+}
+
+// SendCompressed sends packed BatchPacket with given packets.
+func (p *Player) SendCompressed(pks ...Packet) {
+	batch := &Batch{
+		Payloads: make([][]byte, len(pks)),
+	}
+	for i, pk := range pks {
+		batch.Payloads[i] = append([]byte{pk.Pid()}, pk.Write().Done()...)
+	}
+	p.SendPacket(batch)
 }
 
 func (p *Player) send(buf *buffer.Buffer) {

@@ -4,11 +4,13 @@ import (
 	"fmt"
 
 	"github.com/L7-MCPE/lav7"
+	"github.com/L7-MCPE/lav7/level/format/dummy"
 	"github.com/L7-MCPE/raknet"
 	"github.com/L7-MCPE/util"
 )
 
 func main() {
+	dummy.InitDummyChunk()
 	raknet.Players = lav7.Players
 	var r *raknet.Router
 	var err error
