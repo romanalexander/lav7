@@ -4,9 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/L7-MCPE/lav7/level"
-	"github.com/L7-MCPE/lav7/level/format/dummy"
 	"github.com/L7-MCPE/raknet"
 	"github.com/L7-MCPE/util"
 	"github.com/L7-MCPE/util/buffer"
@@ -14,16 +14,19 @@ import (
 
 // Player is a struct for handling/containing MCPE client specific things.
 type Player struct {
-	Address       *net.UDPAddr
-	Username      string
-	ClientID      uint64
-	ClientUUIDRaw [16]byte
-	ClientSecret  string
-	Skin          []byte
-	SkinName      string
-	x, y, z       float32
-	loggedIn      bool
-	closed        bool
+	Address             *net.UDPAddr
+	Username            string
+	ClientID            uint64
+	ClientUUIDRaw       [16]byte
+	ClientSecret        string
+	EntityID            uint64
+	Skin                []byte
+	SkinName            string
+	Position            util.Vector3
+	Level               level.Level
+	Yaw, BodyYaw, Pitch float64
+	loggedIn            bool
+	closed              bool
 }
 
 // HandlePacket handles received MCPE packet after raknet connection is established.
@@ -87,14 +90,22 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		})
 
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
-		for x := int32(-5); x <= 5; x++ {
-			for z := int32(-5); z <= 5; z++ {
-				p.SendChunk(x, z, dummy.DummyChunk)
+		chunkWg := new(sync.WaitGroup)
+		chunkWg.Add(1)
+		go func() {
+			defer chunkWg.Done()
+			for x := int32(-2); x <= 2; x++ {
+				for z := int32(-2); z <= 2; z++ {
+					p.SendChunk(x, z, p.Level.GetChunk(x, z, true))
+				}
 			}
-		}
-		p.firstSpawn()
-		fmt.Println(p.Username + " joined the game")
-		p.SendMessage("Hello, this is lav7 test server!")
+		}()
+		go func() {
+			chunkWg.Wait()
+			p.firstSpawn()
+			fmt.Println(p.Username + " joined the game")
+			p.SendMessage("Hello, this is lav7 test server!")
+		}()
 	case *Batch:
 		pk := pk.(*Batch)
 		for _, pp := range pk.Payloads {

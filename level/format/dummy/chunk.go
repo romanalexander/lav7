@@ -1,23 +1,10 @@
 package dummy
 
-var DummyChunk = new(Chunk)
+import (
+	"sync"
 
-func InitDummyChunk() {
-	for x := byte(0); x < 16; x++ {
-		for z := byte(0); z < 16; z++ {
-			DummyChunk.SetHeightMap(x, z, 60)
-			DummyChunk.SetBiomeColor(x, z, x, 128, z)
-			for y := byte(0); y <= 60; y++ {
-				DummyChunk.SetBlock(x, y, z, 3)
-			}
-			for y := byte(60); y < 128; y++ {
-				DummyChunk.SetBlockSkyLight(x, y, z, 15)
-				DummyChunk.SetBlockLight(x, y, z, 15)
-			}
-			DummyChunk.SetBlock(x, 60, z, 2)
-		}
-	}
-}
+	"github.com/L7-MCPE/lav7/block"
+)
 
 type Chunk struct {
 	blockData    [16 * 16 * 128]byte
@@ -26,6 +13,7 @@ type Chunk struct {
 	skyLightData [16 * 16 * 64]byte // Nibbles
 	heightMap    [16 * 16]byte
 	biomeData    [16 * 16 * 4]byte // Uints
+	RWMutex      *sync.RWMutex
 }
 
 // GetBlock implements level.Chunk interface.
@@ -124,8 +112,29 @@ func (c *Chunk) SetBiomeColor(x, z, r, g, b byte) {
 	c.biomeData[offset+1], c.biomeData[offset+2], c.biomeData[offset+3] = r, g, b
 }
 
+// PopulateHeight implements level.Chunk interface.
+func (c *Chunk) PopulateHeight() {
+	for x := byte(0); x < 16; x++ {
+		for z := byte(0); z < 16; z++ {
+			for y := byte(127); y >= 0; y-- {
+				if c.GetBlock(x, y, z) != 0 {
+					c.SetHeightMap(x, z, y)
+					break
+				}
+			}
+		}
+	}
+}
+
+// Mutex implements level.Chunk interface.
+func (c *Chunk) Mutex() *sync.RWMutex {
+	return c.RWMutex
+}
+
 // FullChunkData returns full chunk payload for FullChunkDataPacket.
 func (c Chunk) FullChunkData() []byte {
+	c.Mutex().RLock()
+	defer c.Mutex().RUnlock()
 	a := append(c.blockData[:], c.metaData[:]...)     // Block ID, Block Metadata
 	b := append(c.skyLightData[:], c.lightData[:]...) // SkyLight, Light
 	c_ := append(c.heightMap[:], c.biomeData[:]...)   // Height Map, Biome colors
@@ -133,4 +142,31 @@ func (c Chunk) FullChunkData() []byte {
 	// No tile entity NBT fields
 	e := append(a, append(b, append(c_, d...)...)...) // Seems dirty :\
 	return e
+}
+
+// ArrayChunk implements level.Chunk interface.
+func (c *Chunk) ArrayChunk(bs [16 * 16 * 128]block.IBlock) {
+	c.Mutex().Lock()
+	defer c.Mutex().Unlock()
+	for i, b := range bs {
+		if b == nil {
+			b = new(block.Block)
+		}
+		c.blockData[i] = b.GetID()
+		if i&0x01 == 0 {
+			c.metaData[i>>1] = (c.metaData[i>>1] & 0xf0) | (b.GetMeta() & 0x0f)
+		} else {
+			c.metaData[i>>1] = (b.GetMeta()&0xf)<<4 | (c.metaData[i>>1] & 0x0f)
+		}
+	}
+	c.PopulateHeight()
+	c.beautifulize()
+}
+
+func (c *Chunk) beautifulize() {
+	for x := byte(0); x < 16; x++ {
+		for z := byte(0); z < 16; z++ {
+			c.SetBiomeColor(x, z, x*16, x*z, z*16)
+		}
+	}
 }
