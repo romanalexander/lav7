@@ -1,6 +1,8 @@
 package lav7
 
 import (
+	"encoding/hex"
+
 	"github.com/L7-MCPE/raknet"
 	"github.com/L7-MCPE/util"
 	"github.com/L7-MCPE/util/buffer"
@@ -68,6 +70,8 @@ var packets = map[byte]Packet{
 	LoginHead:         new(Login),
 	BatchHead:         new(Batch),
 	TextHead:          new(Text),
+	MovePlayerHead:    new(MovePlayer),
+	RemoveBlockHead:   new(RemoveBlock),
 	FullChunkDataHead: new(FullChunkData),
 }
 
@@ -232,6 +236,58 @@ func (i StartGame) Write() *buffer.Buffer {
 		i.SpawnY, i.SpawnZ, i.X,
 		i.Y, i.Z)
 	buf.WriteByte(0)
+	return buf
+}
+
+const (
+	MoveModeNormal byte = iota
+	MoveModeReset
+	MoveModeRotation
+)
+
+type MovePlayer struct {
+	EntityID            uint64
+	X, Y, Z             float32
+	Yaw, BodyYaw, Pitch float32
+	Mode                byte
+	OnGround            bool
+}
+
+func (i MovePlayer) Pid() byte { return MovePlayerHead }
+
+func (i *MovePlayer) Read(buf *buffer.Buffer) {
+	buf.BatchRead(&i.EntityID, &i.X, &i.Y, &i.Z,
+		&i.Yaw, &i.BodyYaw, &i.Pitch,
+		&i.Mode, &i.OnGround)
+}
+
+func (i MovePlayer) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.EntityID, i.X, i.Y, i.Z,
+		i.Yaw, i.BodyYaw, i.Pitch,
+		i.Mode, i.OnGround)
+	return buf
+}
+
+type RemoveBlock struct {
+	EntityID uint64
+	X, Z     int32
+	Y        byte
+}
+
+func (i RemoveBlock) Pid() byte { return RemoveBlockHead }
+
+func (i *RemoveBlock) Read(buf *buffer.Buffer) {
+	util.Debug(hex.Dump(buf.Payload), buf.Offset)
+	var x, z uint32
+	buf.BatchRead(&i.EntityID, &x, &z, &i.Y)
+	i.X, i.Z = int32(x), int32(z)
+	util.Debug(i.EntityID, i.X, i.Z, i.Y)
+}
+
+func (i *RemoveBlock) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.EntityID, uint32(i.X), uint32(i.Z), i.Y)
 	return buf
 }
 

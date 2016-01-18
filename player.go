@@ -119,6 +119,12 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 			return
 		}
 		p.SendMessage("Echo from: " + pk.Message)
+	case *MovePlayer:
+		//pk := pk.(*MovePlayer)
+		// util.Debug("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
+	case *RemoveBlock:
+		pk := pk.(*RemoveBlock)
+		util.Debug("Block break:", pk.X, pk.Y, pk.Z)
 	default:
 		util.Debug("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented: " + fmt.Sprint(pk))
 	}
