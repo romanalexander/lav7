@@ -24,6 +24,13 @@ func AddPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) {
 	return p.HandlePacket
 }
 
+// BroadcastPacket sends given packet to all online players.
+func BroadcastPacket(pk Packet) {
+	for _, p := range Players {
+		p.(*Player).SendPacket(pk)
+	}
+}
+
 // GetLevel returns level reference with given name if exists, or nil.
 func GetLevel(name string) level.Level {
 	if l, ok := levels[name]; ok {
