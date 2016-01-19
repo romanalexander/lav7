@@ -89,8 +89,8 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		})
 
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
-		xRadius := int32(5)
-		zRadius := int32(5)
+		xRadius := int32(2)
+		zRadius := int32(2)
 		chunkChan := make(chan struct {
 			x, z int32
 			c    level.Chunk
@@ -126,7 +126,8 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		if pk.TextType == TextTypeTranslation {
 			return
 		}
-		p.SendMessage("Echo from: " + pk.Message)
+		util.Debug(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
+		AsPlayers(func(pp *Player) error { pp.SendMessage(fmt.Sprintf("<%s> %s", p.Username, pk.Message)); return nil })
 	case *MovePlayer:
 		//pk := pk.(*MovePlayer)
 		// util.Debug("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)

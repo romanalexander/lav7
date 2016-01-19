@@ -24,6 +24,16 @@ func AddPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) {
 	return p.HandlePacket
 }
 
+// AsPlayers executes given callback with every online players.
+func AsPlayers(callback func(*Player) error) error {
+	for _, p := range Players {
+		if err := callback(p.(*Player)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // BroadcastPacket sends given packet to all online players.
 func BroadcastPacket(pk Packet) {
 	for _, p := range Players {
