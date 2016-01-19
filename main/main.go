@@ -19,7 +19,7 @@ func main() {
 	start := time.Now()
 	for x := int32(-2); x <= 2; x++ {
 		for z := int32(-2); z <= 2; z++ {
-			lav7.GetDefaultLevel().GetChunk(x, z, true)
+			go func() { lav7.GetDefaultLevel().GetChunk(x, z, true) }()
 		}
 	}
 	util.Debug("Elipsed time:", time.Since(start).Seconds(), "seconds")
