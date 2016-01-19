@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
-	"sync"
 
 	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/raknet"
@@ -90,18 +89,27 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		})
 
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
-		chunkWg := new(sync.WaitGroup)
-		chunkWg.Add(1)
+		xRadius := int32(5)
+		zRadius := int32(5)
+		chunkChan := make(chan struct {
+			x, z int32
+			c    level.Chunk
+		}, (xRadius*2+1)*(zRadius*2+1))
 		go func() {
-			defer chunkWg.Done()
-			for x := int32(-2); x <= 2; x++ {
-				for z := int32(-2); z <= 2; z++ {
-					p.SendChunk(x, z, p.Level.GetChunk(x, z, true))
+			for x := -xRadius; x <= xRadius; x++ {
+				for z := -zRadius; z <= zRadius; z++ {
+					chunkChan <- struct {
+						x, z int32
+						c    level.Chunk
+					}{x, z, p.Level.GetChunk(x, z, true)}
 				}
 			}
 		}()
 		go func() {
-			chunkWg.Wait()
+			for chunks := (xRadius*2 + 1) * (zRadius*2 + 1); chunks > 0; chunks-- {
+				s := <-chunkChan
+				p.SendChunk(s.x, s.z, s.c)
+			}
 			p.firstSpawn()
 			fmt.Println(p.Username + " joined the game")
 			p.SendMessage("Hello, this is lav7 test server!")
