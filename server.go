@@ -3,6 +3,7 @@ package lav7
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync/atomic"
 
 	"github.com/L7-MCPE/lav7/level"
@@ -52,4 +53,20 @@ func GetLevel(name string) level.Level {
 // GetDefaultLevel returns default level reference.
 func GetDefaultLevel() level.Level {
 	return levels[defaultLvl]
+}
+
+// Stop stops entire server.
+func Stop(reason string) {
+	if reason == "" {
+		reason = "no reason"
+	}
+	fmt.Println("Stopping server: " + reason)
+	AsPlayers(func(p *Player) error {
+		p.Kick("Server stop: " + reason)
+		return nil
+	})
+	for _, l := range levels {
+		l.Save()
+	}
+	os.Exit(0)
 }

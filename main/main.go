@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/L7-MCPE/lav7"
@@ -16,12 +17,15 @@ func main() {
 	raknet.Players = lav7.Players
 	lav7.GetDefaultLevel().Init()
 	util.Debug("Generating chunks")
+	wg := new(sync.WaitGroup)
+	wg.Add(25)
 	start := time.Now()
-	for x := int32(-7); x <= 7; x++ {
-		for z := int32(-7); z <= 7; z++ {
-			go func() { lav7.GetDefaultLevel().GetChunk(x, z, true) }()
+	for x := int32(-2); x <= 2; x++ {
+		for z := int32(-2); z <= 2; z++ {
+			go func(x, z int32) { lav7.GetDefaultLevel().GetChunk(x, z, true); wg.Done() }(x, z)
 		}
 	}
+	wg.Wait()
 	util.Debug("Elapsed time:", time.Since(start).Seconds(), "seconds")
 	var r *raknet.Router
 	var err error

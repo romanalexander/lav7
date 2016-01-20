@@ -3,7 +3,7 @@ package dummy
 import (
 	"sync"
 
-	"github.com/L7-MCPE/lav7/block"
+	"github.com/L7-MCPE/util/buffer"
 )
 
 type Chunk struct {
@@ -144,19 +144,16 @@ func (c Chunk) FullChunkData() []byte {
 	return e
 }
 
-// ArrayChunk implements level.Chunk interface.
-func (c *Chunk) ArrayChunk(bs [16 * 16 * 128]block.IBlock) {
+// BlockChunk implements level.Chunk interface.
+func (c *Chunk) BlockChunk(bs [16 * 16 * 128][2]byte) {
 	c.Mutex().Lock()
 	defer c.Mutex().Unlock()
 	for i, b := range bs {
-		if b == nil {
-			b = new(block.Block)
-		}
-		c.blockData[i] = b.GetID()
+		c.blockData[i] = b[0]
 		if i&0x01 == 0 {
-			c.metaData[i>>1] = (c.metaData[i>>1] & 0xf0) | (b.GetMeta() & 0x0f)
+			c.metaData[i>>1] = (c.metaData[i>>1] & 0xf0) | (b[0] & 0x0f)
 		} else {
-			c.metaData[i>>1] = (b.GetMeta()&0xf)<<4 | (c.metaData[i>>1] & 0x0f)
+			c.metaData[i>>1] = (b[1]&0xf)<<4 | (c.metaData[i>>1] & 0x0f)
 		}
 	}
 	c.PopulateHeight()
@@ -169,4 +166,21 @@ func (c *Chunk) beautifulize() {
 			c.SetBiomeColor(x, z, x*16, x*z, z*16)
 		}
 	}
+}
+
+func (c *Chunk) write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.BatchWrite(c.blockData[:], c.metaData[:], c.lightData[:], c.skyLightData[:], c.heightMap[:], c.biomeData[:])
+	return buf
+}
+
+func (c *Chunk) read(buf *buffer.Buffer) {
+	c.Mutex().Lock()
+	defer c.Mutex().Unlock()
+	copy(c.blockData[:], buf.Read(16*16*128))
+	copy(c.metaData[:], buf.Read(16*16*64))
+	copy(c.lightData[:], buf.Read(16*16*64))
+	copy(c.skyLightData[:], buf.Read(16*16*64))
+	copy(c.heightMap[:], buf.Read(16*16))
+	copy(c.biomeData[:], buf.Read(16*16*4))
 }

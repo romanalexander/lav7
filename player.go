@@ -126,6 +126,11 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		if pk.TextType == TextTypeTranslation {
 			return
 		}
+		if pk.Message[:1] == "/" {
+			if pk.Message[1:] == "stop" {
+				Stop("issued by player " + p.Username)
+			}
+		}
 		util.Debug(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
 		AsPlayers(func(pp *Player) error { pp.SendMessage(fmt.Sprintf("<%s> %s", p.Username, pk.Message)); return nil })
 	case *MovePlayer:
@@ -133,7 +138,8 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		// util.Debug("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
 	case *RemoveBlock:
 		pk := pk.(*RemoveBlock)
-		util.Debug("Block break:", pk.X, pk.Y, pk.Z)
+		util.Debug("Rm:", pk.X, pk.Y, pk.Z)
+		p.Level.SetBlock(pk.X, int32(pk.Y), pk.Z, 0) // Air
 	default:
 		util.Debug("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented: " + fmt.Sprint(pk))
 	}
