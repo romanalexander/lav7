@@ -6,9 +6,9 @@ import (
 	"net"
 
 	"github.com/L7-MCPE/lav7/level"
-	"github.com/L7-MCPE/raknet"
-	"github.com/L7-MCPE/util"
-	"github.com/L7-MCPE/util/buffer"
+	"github.com/L7-MCPE/lav7/raknet"
+	"github.com/L7-MCPE/lav7/util"
+	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
 // Player is a struct for handling/containing MCPE client specific things.

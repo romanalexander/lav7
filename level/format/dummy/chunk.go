@@ -3,7 +3,7 @@ package dummy
 import (
 	"sync"
 
-	"github.com/L7-MCPE/util/buffer"
+	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
 type Chunk struct {

@@ -3,9 +3,9 @@ package lav7
 import (
 	"encoding/hex"
 
-	"github.com/L7-MCPE/raknet"
-	"github.com/L7-MCPE/util"
-	"github.com/L7-MCPE/util/buffer"
+	"github.com/L7-MCPE/lav7/raknet"
+	"github.com/L7-MCPE/lav7/util"
+	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
 const (

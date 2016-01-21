@@ -9,8 +9,8 @@ import (
 
 	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/lav7/level/gen"
-	"github.com/L7-MCPE/util"
-	"github.com/L7-MCPE/util/buffer"
+	"github.com/L7-MCPE/lav7/util"
+	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
 // Package dummy implements simple Level/Chunk interface and provides the example for implementing other formats.

@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/L7-MCPE/lav7/level"
-	"github.com/L7-MCPE/util/buffer"
+	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
 // AddPlayer registers player to the server and returns packet handler function for it.

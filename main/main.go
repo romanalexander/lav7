@@ -8,8 +8,8 @@ import (
 
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/command"
-	"github.com/L7-MCPE/raknet"
-	"github.com/L7-MCPE/util"
+	"github.com/L7-MCPE/lav7/raknet"
+	"github.com/L7-MCPE/lav7/util"
 )
 
 func main() {
