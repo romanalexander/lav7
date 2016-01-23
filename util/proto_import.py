@@ -1,7 +1,7 @@
 # Imports MCPE protocol field informations from PocketMine-MP source code
 # This a just concept scratch code, so the code could be dirty or inefficient.
 
-import sys, pid_import
+import sys, pid_import, traceback, os
 from pathlib import Path
 
 if len(sys.argv) < 2:
@@ -153,6 +153,9 @@ def parse_coder(codelist):
 
 targets = list(get_targets())
 def get_go_code(n: int):
+    if targets[n][1] == "Batch":
+        f.write(batch_hardcoded)
+        return
     out = ""
     clscode = Chainable(read(targets[n][1])).get_class_code()
     consts = list(map(
@@ -181,13 +184,14 @@ def get_go_code(n: int):
     out += "type %s struct{\n" % targets[n][0]
     for field in fields:
         field[1] = field[1][0].upper() + field[1][1:]
+        field[1] = ''.join(filter(lambda x: x.isalpha(), field[1]))
         if field[0] in phpType:
             out +="    %s %s\n" % (field[1], phpType[field[0]])
     out += "}\n\n"
 
     out += "// Pid implements Packet interface.\nfunc (i *%s) Pid() byte { return %sHead }\n\n" % (targets[n][0], targets[n][0])
 
-    out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){\n"
+    out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){\n" % targets[n][0]
     for i, field in enumerate(fields):
         if field[0] in phpType:
             out += "    i.%s = buf.Read%s()\n" % tuple(field)
@@ -199,7 +203,7 @@ def get_go_code(n: int):
             out += "    // Unexpected code:" + ' '.join(field) + "\n"
     out += "}\n\n"
 
-    out += "// Write implements Packet interface.\nfunc (i *%s) Write() buf *buffer.Buffer{\n    buf := new(buffer.Buffer)\n"
+    out += "// Write implements Packet interface.\nfunc (i *%s) Write() *buffer.Buffer{\n    buf := new(buffer.Buffer)\n" % targets[n][0]
     for i, field in enumerate(fields):
         if field[0] in phpType:
             out += "    buf.Write%s(i.%s)\n" % tuple(field)
@@ -214,6 +218,22 @@ def get_go_code(n: int):
 if __name__ == "__main__":
     global f
     f = open("out.go", "w")
+    f.write("""package lav7
+
+import (
+	"encoding/hex"
+
+	"github.com/L7-MCPE/lav7/raknet"
+	"github.com/L7-MCPE/lav7/util"
+	"github.com/L7-MCPE/lav7/util/buffer"
+)
+
+""")
+    f.write(pid_import.format_consts(pid_import.parse_consts()) + "\n\n")
+    f.write("var packets = map[byte]Packet{\n")
+    for target in targets:
+        f.write("    %sPacket: new(%s),\n" % (target[0], target[0]))
+    f.write("}\n\n")
     for i in range(len(targets)):
         try:
             get_go_code(i)
@@ -222,10 +242,16 @@ if __name__ == "__main__":
     lambda x: "// " + x,
     ("""An exception was thrown while parsing/converting PocketMine-MP protocol.
 Please read original PHP code and port it manually.
-Exception: %s\n\n""" % str(sys.exc_info()) +
+Exception: %s""" % (str(sys.exc_info()[1]) + "\n\n") +
 Chainable(read(targets[i][1])).get_class_code().data).split("\n")
-)))
+)) + "\n\n")
             print(targets[i][0]+"Packet:", e)
             traceback.print_exc()
+            print()
             continue
+
+    fmt = os.popen("gofmt -s -e out.go").read()
+    f.seek(0)
+    f.truncate()
+    f.write(fmt)
     f.close()
