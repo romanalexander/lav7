@@ -181,27 +181,33 @@ def get_go_code(n: int):
             out += "    %s byte = %d\n" % const
         out += ")\n\n"
 
-    out += "type %s struct{\n" % targets[n][0]
-    for field in fields:
-        field[1] = field[1][0].upper() + field[1][1:]
-        field[1] = ''.join(filter(lambda x: x.isalpha(), field[1]))
-        if field[0] in phpType:
-            out +="    %s %s\n" % (field[1], phpType[field[0]])
-    out += "}\n\n"
+    if len(fields) > 0:
+        out += "type %s struct {\n" % targets[n][0]
+        for field in fields:
+            field[1] = field[1][0].upper() + field[1][1:]
+            field[1] = ''.join(filter(lambda x: x.isalpha(), field[1]))
+            if field[0] in phpType:
+                out +="    %s %s\n" % (field[1], phpType[field[0]])
+        out += "}\n\n"
+    else:
+        out += "type %s struct{}\n" % targets[n][0]
 
     out += "// Pid implements Packet interface.\nfunc (i *%s) Pid() byte { return %sHead }\n\n" % (targets[n][0], targets[n][0])
 
-    out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){\n" % targets[n][0]
-    for i, field in enumerate(fields):
-        if field[0] in phpType:
-            out += "    i.%s = buf.Read%s()\n" % tuple(field)
-        elif field[0][:9] == "LengthOf_":
-            out += "    i.%s = buf.Read(buf.Read%s())\n"%  (field[1], field[0][9:])
-        elif field[0] == "" and fields[i-1][0][:9] == "LengthOf_" and fields[i-1][1] == field[1]:
-            continue
-        else:
-            out += "    // Unexpected code:" + ' '.join(field) + "\n"
-    out += "}\n\n"
+    if len(fields) > 0:
+        out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){\n" % targets[n][0]
+        for i, field in enumerate(fields):
+            if field[0] in phpType:
+                out += "    i.%s = buf.Read%s()\n" % tuple(field)
+            elif field[0][:9] == "LengthOf_":
+                out += "    i.%s = buf.Read(buf.Read%s())\n"%  (field[1], field[0][9:])
+            elif field[0] == "" and fields[i-1][0][:9] == "LengthOf_" and fields[i-1][1] == field[1]:
+                continue
+            else:
+                out += "    // Unexpected code:" + ' '.join(field) + "\n"
+        out += "}\n\n"
+    else:
+        out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){}\n" % targets[n][0]
 
     out += "// Write implements Packet interface.\nfunc (i *%s) Write() *buffer.Buffer{\n    buf := new(buffer.Buffer)\n" % targets[n][0]
     for i, field in enumerate(fields):

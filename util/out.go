@@ -118,15 +118,13 @@ var packets = map[byte]Packet{
 	PlayerListPacket:          new(PlayerList),
 }
 
-type Login struct {
-}
+type Login struct{}
 
 // Pid implements Packet interface.
 func (i *Login) Pid() byte { return LoginHead }
 
 // Read implements Packet interface.
-func (i *Login) Read(buf *buffer.Buffer) {
-}
+func (i *Login) Read(buf *buffer.Buffer) {}
 
 // Write implements Packet interface.
 func (i *Login) Write() *buffer.Buffer {
@@ -600,15 +598,13 @@ func (i *MovePlayer) Write() *buffer.Buffer {
 	return buf
 }
 
-type RemoveBlock struct {
-}
+type RemoveBlock struct{}
 
 // Pid implements Packet interface.
 func (i *RemoveBlock) Pid() byte { return RemoveBlockHead }
 
 // Read implements Packet interface.
-func (i *RemoveBlock) Read(buf *buffer.Buffer) {
-}
+func (i *RemoveBlock) Read(buf *buffer.Buffer) {}
 
 // Write implements Packet interface.
 func (i *RemoveBlock) Write() *buffer.Buffer {
@@ -1002,15 +998,13 @@ func (i *Interact) Write() *buffer.Buffer {
 	return buf
 }
 
-type UseItem struct {
-}
+type UseItem struct{}
 
 // Pid implements Packet interface.
 func (i *UseItem) Pid() byte { return UseItemHead }
 
 // Read implements Packet interface.
-func (i *UseItem) Read(buf *buffer.Buffer) {
-}
+func (i *UseItem) Read(buf *buffer.Buffer) {}
 
 // Write implements Packet interface.
 func (i *UseItem) Write() *buffer.Buffer {
@@ -1257,15 +1251,13 @@ func (i *Respawn) Write() *buffer.Buffer {
 	return buf
 }
 
-type DropItem struct {
-}
+type DropItem struct{}
 
 // Pid implements Packet interface.
 func (i *DropItem) Pid() byte { return DropItemHead }
 
 // Read implements Packet interface.
-func (i *DropItem) Read(buf *buffer.Buffer) {
-}
+func (i *DropItem) Read(buf *buffer.Buffer) {}
 
 // Write implements Packet interface.
 func (i *DropItem) Write() *buffer.Buffer {
@@ -1572,15 +1564,13 @@ func (i *ContainerSetData) Write() *buffer.Buffer {
 //
 //
 
-type CraftingEvent struct {
-}
+type CraftingEvent struct{}
 
 // Pid implements Packet interface.
 func (i *CraftingEvent) Pid() byte { return CraftingEventHead }
 
 // Read implements Packet interface.
-func (i *CraftingEvent) Read(buf *buffer.Buffer) {
-}
+func (i *CraftingEvent) Read(buf *buffer.Buffer) {}
 
 // Write implements Packet interface.
 func (i *CraftingEvent) Write() *buffer.Buffer {
