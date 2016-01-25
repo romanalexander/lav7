@@ -123,6 +123,12 @@ type Packet interface {
 	Write() *buffer.Buffer
 }
 
+// GetPackets returns Packet struct with given pid.
+func GetPacket(pid byte) Packet {
+	pk, _ := packets[pid]
+	return pk
+}
+
 type Login struct {
 	Username       string
 	Proto1, Proto2 uint32
