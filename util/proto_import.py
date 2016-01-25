@@ -237,9 +237,12 @@ import (
 """)
     f.write(pid_import.format_consts(pid_import.parse_consts()) + "\n\n")
     f.write("var packets = map[byte]Packet{\n")
+    print("hh")
     for target in targets:
-        f.write("    %sPacket: new(%s),\n" % (target[0], target[0]))
+        f.write("    %sHead: new(%s),\n" % (target[0], target[0]))
+
     f.write("}\n\n")
+
     for i in range(len(targets)):
         try:
             get_go_code(i)
