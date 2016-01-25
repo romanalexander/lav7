@@ -1,8 +1,7 @@
 package lav7
 
 import (
-	"encoding/hex"
-
+	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
@@ -118,17 +117,35 @@ var packets = map[byte]Packet{
 	PlayerListPacket:          new(PlayerList),
 }
 
-type Login struct{}
+type Login struct {
+	Username       string
+	Proto1, Proto2 uint32
+	ClientID       uint64
+	RawUUID        [16]byte
+	ServerAddress  string
+	ClientSecret   string
+	SkinName       string
+	Skin           []byte
+}
 
-// Pid implements Packet interface.
-func (i *Login) Pid() byte { return LoginHead }
+func (i Login) Pid() byte { return LoginHead } // 0x8f
 
-// Read implements Packet interface.
-func (i *Login) Read(buf *buffer.Buffer) {}
+func (i *Login) Read(buf *buffer.Buffer) {
+	buf.BatchRead(&i.Username, &i.Proto1)
+	if i.Proto1 < raknet.MinecraftProtocol { // Old protocol
+		return
+	}
+	buf.BatchRead(&i.Proto2, &i.ClientID)
+	copy(i.RawUUID[:], buf.Read(16))
+	buf.BatchRead(&i.ServerAddress, &i.ClientSecret, &i.SkinName)
+	i.Skin = []byte(buf.ReadString())
+}
 
-// Write implements Packet interface.
-func (i *Login) Write() *buffer.Buffer {
+func (i Login) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.Username, i.Proto1, i.Proto2,
+		i.ClientID, i.RawUUID[:], i.ServerAddress,
+		i.ClientSecret, i.SkinName, string(i.Skin))
 	return buf
 }
 
@@ -143,15 +160,12 @@ type PlayStatus struct {
 	Status uint32
 }
 
-// Pid implements Packet interface.
 func (i *PlayStatus) Pid() byte { return PlayStatusHead }
 
-// Read implements Packet interface.
 func (i *PlayStatus) Read(buf *buffer.Buffer) {
-	i.Int = buf.ReadStatus()
+	i.Status = buf.ReadStatus()
 }
 
-// Write implements Packet interface.
 func (i *PlayStatus) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(i.Status)
@@ -162,15 +176,12 @@ type Disconnect struct {
 	Message string
 }
 
-// Pid implements Packet interface.
 func (i *Disconnect) Pid() byte { return DisconnectHead }
 
-// Read implements Packet interface.
 func (i *Disconnect) Read(buf *buffer.Buffer) {
-	i.String = buf.ReadMessage()
+	i.Message = buf.ReadMessage()
 }
 
-// Write implements Packet interface.
 func (i *Disconnect) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteString(i.Message)
@@ -178,310 +189,270 @@ func (i *Disconnect) Write() *buffer.Buffer {
 }
 
 type Batch struct {
+	Payloads [][]byte
 }
 
-// Pid implements Packet interface.
-func (i *Batch) Pid() byte { return BatchHead }
+func (i Batch) Pid() byte { return BatchHead } // 0x92
 
-// Read implements Packet interface.
 func (i *Batch) Read(buf *buffer.Buffer) {
-	i.Payload = buf.Read(buf.ReadInt())
+	i.Payloads = make([][]byte, 0)
+	payload, err := util.DecodeDeflate(buf.Read(uint32(buf.ReadInt())))
+	if err != nil {
+		util.Debug("Error while decompressing Batch payload:", err)
+		return
+	}
+	b := buffer.FromBytes(payload)
+	for b.Require(4) {
+		size := b.ReadInt()
+		pk := b.Read(size)
+		if pk[0] == 0x92 {
+			panic("Invalid BatchPacket inside BatchPacket")
+		}
+		i.Payloads = append(i.Payloads, pk)
+	}
 }
 
-// Write implements Packet interface.
-func (i *Batch) Write() *buffer.Buffer {
+func (i Batch) Write() *buffer.Buffer {
+	b := new(buffer.Buffer)
+	for _, pk := range i.Payloads {
+		b.WriteInt(uint32(len(pk)))
+		b.Write(pk)
+	}
+	payload := util.EncodeDeflate(b.Done())
 	buf := new(buffer.Buffer)
-	buf.WriteInt(len(i.Payload))
+	buf.BatchWrite(uint32(len(payload)), payload)
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::TEXT_PACKET;
-//
-// 	const TYPE_RAW = 0;
-// 	const TYPE_CHAT = 1;
-// 	const TYPE_TRANSLATION = 2;
-// 	const TYPE_POPUP = 3;
-// 	const TYPE_TIP = 4;
-// 	const TYPE_SYSTEM = 5;
-//
-// 	public $type;
-// 	public $source;
-// 	public $message;
-// 	public $parameters = [];
-//
-// 	public function decode(){
-// 		$this->type = $this->getByte();
-// 		switch($this->type){
-// 			case self::TYPE_POPUP:
-// 			case self::TYPE_CHAT:
-// 				$this->source = $this->getString();
-// 			case self::TYPE_RAW:
-// 			case self::TYPE_TIP:
-// 			case self::TYPE_SYSTEM:
-// 				$this->message = $this->getString();
-// 				break;
-//
-// 			case self::TYPE_TRANSLATION:
-// 				$this->message = $this->getString();
-// 				$count = $this->getByte();
-// 				for($i = 0; $i < $count; ++$count){
-// 					$this->parameters[] = $this->getString();
-// 				}
-// 		}
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putByte($this->type);
-// 		switch($this->type){
-// 			case self::TYPE_POPUP:
-// 			case self::TYPE_CHAT:
-// 				$this->putString($this->source);
-// 			case self::TYPE_RAW:
-// 			case self::TYPE_TIP:
-// 			case self::TYPE_SYSTEM:
-// 				$this->putString($this->message);
-// 				break;
-//
-// 			case self::TYPE_TRANSLATION:
-// 				$this->putString($this->message);
-// 				$this->putByte(count($this->parameters));
-// 				foreach($this->parameters as $p){
-// 					$this->putString($p);
-// 				}
-// 		}
-// 	}
-//
-//
+const (
+	TextTypeRaw byte = iota
+	TextTypeChat
+	TextTypeTranslation
+	TextTypePopup
+	TextTypeTip
+	TextTypeSystem
+)
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: 'int' object is not subscriptable
-//
-// 	const NETWORK_ID = Info::SET_TIME_PACKET;
-//
-// 	public $time;
-// 	public $started = true;
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putInt((int) (($this->time / Level::TIME_FULL) * 19200));
-// 		$this->putByte($this->started ? 1 : 0);
-// 	}
-//
-//
+type Text struct {
+	TextType byte
+	Source   string
+	Message  string
+	Params   []string
+}
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: 'int' object is not subscriptable
-//
-// 	const NETWORK_ID = Info::START_GAME_PACKET;
-//
-// 	public $seed;
-// 	public $dimension;
-// 	public $generator;
-// 	public $gamemode;
-// 	public $eid;
-// 	public $spawnX;
-// 	public $spawnY;
-// 	public $spawnZ;
-// 	public $x;
-// 	public $y;
-// 	public $z;
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putInt($this->seed);
-// 		$this->putByte($this->dimension);
-// 		$this->putInt($this->generator);
-// 		$this->putInt($this->gamemode);
-// 		$this->putLong($this->eid);
-// 		$this->putInt($this->spawnX);
-// 		$this->putInt($this->spawnY);
-// 		$this->putInt($this->spawnZ);
-// 		$this->putFloat($this->x);
-// 		$this->putFloat($this->y);
-// 		$this->putFloat($this->z);
-// 		$this->putByte(0);
-// 	}
-//
-//
+func (i Text) Pid() byte { return TextHead } // 0x93
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: 'int' object is not subscriptable
-//
-// 	const NETWORK_ID = Info::ADD_PLAYER_PACKET;
-//
-// 	public $uuid;
-// 	public $username;
-// 	public $eid;
-// 	public $x;
-// 	public $y;
-// 	public $z;
-// 	public $speedX;
-// 	public $speedY;
-// 	public $speedZ;
-// 	public $pitch;
-// 	public $yaw;
-// 	public $item;
-// 	public $metadata;
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putUUID($this->uuid);
-// 		$this->putString($this->username);
-// 		$this->putLong($this->eid);
-// 		$this->putFloat($this->x);
-// 		$this->putFloat($this->y);
-// 		$this->putFloat($this->z);
-// 		$this->putFloat($this->speedX);
-// 		$this->putFloat($this->speedY);
-// 		$this->putFloat($this->speedZ);
-// 		$this->putFloat($this->yaw);
-// 		$this->putFloat($this->yaw); //TODO headrot
-// 		$this->putFloat($this->pitch);
-// 		$this->putSlot($this->item);
-//
-// 		$meta = Binary::writeMetadata($this->metadata);
-// 		$this->put($meta);
-// 	}
-//
-//
+func (i *Text) Read(buf *buffer.Buffer) {
+	i.TextType = buf.ReadByte()
+	switch i.TextType {
+	case TextTypePopup, TextTypeChat:
+		buf.ReadAny(&i.Source)
+		fallthrough
+	case TextTypeRaw, TextTypeTip, TextTypeSystem:
+		buf.ReadAny(&i.Message)
+	case TextTypeTranslation:
+		buf.ReadAny(&i.Message)
+		cnt := buf.ReadByte()
+		i.Params = make([]string, cnt)
+		for k := byte(0); k < cnt; k++ {
+			i.Params[k] = buf.ReadString()
+		}
+	}
+}
+
+func (i Text) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.WriteByte(i.TextType)
+	switch i.TextType {
+	case TextTypePopup, TextTypeChat:
+		buf.WriteAny(i.Source)
+		fallthrough
+	case TextTypeRaw, TextTypeTip, TextTypeSystem:
+		buf.WriteAny(i.Message)
+	case TextTypeTranslation:
+		buf.WriteAny(&i.Message)
+		buf.WriteByte(byte(len(i.Params)))
+		for _, p := range i.Params {
+			buf.WriteAny(p)
+		}
+	}
+	return buf
+}
+
+type SetTime struct {
+	Time    uint32
+	Started bool
+}
+
+func (i SetTime) Pid() byte { return SetTimeHead }
+
+func (i *SetTime) Read(buf *buffer.Buffer) {
+	i.Time = uint32((buf.ReadInt() / 19200) * level.FullTime)
+	i.Started = buf.ReadBool()
+}
+
+func (i SetTime) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.WriteInt(uint32((i.Time / level.FullTime) * 19200))
+	buf.WriteBool(i.Started)
+	return buf
+}
+
+type StartGame struct {
+	Seed                   uint32
+	Dimension              byte
+	Generator              uint32
+	Gamemode               uint32
+	EntityID               uint64
+	SpawnX, SpawnY, SpawnZ uint32
+	X, Y, Z                float32
+}
+
+func (i StartGame) Pid() byte { return StartGameHead } // 0x95
+
+func (i *StartGame) Read(buf *buffer.Buffer) {
+	buf.BatchRead(&i.Seed, &i.Dimension, &i.Generator,
+		&i.Gamemode, &i.EntityID, &i.SpawnX,
+		&i.SpawnY, &i.SpawnZ, &i.X,
+		&i.Y, &i.Z)
+}
+
+func (i StartGame) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.Seed, i.Dimension, i.Generator,
+		i.Gamemode, i.EntityID, i.SpawnX,
+		i.SpawnY, i.SpawnZ, i.X,
+		i.Y, i.Z)
+	buf.WriteByte(0)
+	return buf
+}
+
+type AddPlayer struct {
+	RawUUID                [16]byte
+	Username               string
+	EntityID               uint64
+	X, Y, Z                float32
+	SpeedX, SpeedY, SpeedZ float32
+	Yaw, HeadYaw, Pitch    float32
+	Metadata               []byte
+}
+
+func (i AddPlayer) Pid() byte { return AddPlayerHead }
+
+func (i *AddPlayer) Read(buf *buffer.Buffer) {
+	copy(i.RawUUID[:], buf.Read(16))
+	buf.BatchRead(&i.Username, &i.EntityID,
+		&i.X, &i.Y, &i.Z,
+		&i.SpeedX, &i.SpeedY, &i.SpeedZ,
+		&i.Yaw, &i.HeadYaw, &i.Pitch)
+	i.MetaData = i.Read(0)
+}
+
+func (i AddPlayer) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.RawUUID[:], i.Username, i.EntityID,
+		i.X, i.Y, i.Z,
+		i.SpeedX, i.SpeedY, i.SpeedZ,
+		i.Yaw, i.HeadYaw, i.Pitch, i.MetaData)
+	buf.WriteByte(0x7f) // Temporal, TODO: implement metadata functions
+	return buf
+}
 
 type RemovePlayer struct {
-	Eid uint64
+	EntityID uint64
+	RawUUID  [16]byte
 }
 
-// Pid implements Packet interface.
-func (i *RemovePlayer) Pid() byte { return RemovePlayerHead }
+func (i RemovePlayer) Pid() byte { return RemovePlayerHead }
 
-// Read implements Packet interface.
 func (i *RemovePlayer) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
-	// Unexpected code:UUID ClientId
+	i.EntityID = buf.ReadLong()
+	copy(i.RawUUID[:], buf.Read(16))
 }
 
-// Write implements Packet interface.
-func (i *RemovePlayer) Write() *buffer.Buffer {
+func (i RemovePlayer) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
-	// Unexpected code:UUID ClientId
+	buf.WriteLong(i.EntityID)
+	buf.Write(i.RawUUID[:])
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::ADD_ENTITY_PACKET;
-//
-// 	public $eid;
-// 	public $type;
-// 	public $x;
-// 	public $y;
-// 	public $z;
-// 	public $speedX;
-// 	public $speedY;
-// 	public $speedZ;
-// 	public $yaw;
-// 	public $pitch;
-// 	public $metadata;
-// 	public $links = [];
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putLong($this->eid);
-// 		$this->putInt($this->type);
-// 		$this->putFloat($this->x);
-// 		$this->putFloat($this->y);
-// 		$this->putFloat($this->z);
-// 		$this->putFloat($this->speedX);
-// 		$this->putFloat($this->speedY);
-// 		$this->putFloat($this->speedZ);
-// 		$this->putFloat($this->yaw);
-// 		$this->putFloat($this->pitch);
-// 		$meta = Binary::writeMetadata($this->metadata);
-// 		$this->put($meta);
-// 		$this->putShort(count($this->links));
-// 		foreach($this->links as $link){
-// 			$this->putLong($link[0]);
-// 			$this->putLong($link[1]);
-// 			$this->putByte($link[2]);
-// 		}
-// 	}
-//
-//
+type AddEntity struct {
+	EntityID               uint64
+	Type                   uint32
+	X, Y, Z                float32
+	SpeedX, SpeedY, SpeedZ float32
+	Yaw, Pitch             float32
+	Metadata               []byte
+	Link1, Link2           uint64
+	Link3                  byte
+}
+
+func (i AddEntity) Pid() byte { return AddEntityHead }
+
+func (i *AddEntity) Read(buf *buffer.Buffer) {
+	buf.BatchRead(&i.EntityID, &i.Type,
+		&i.X, &i.Y, &i.Z,
+		&i.SpeedX, &i.SpeedY, &i.SpeedZ,
+		&i.Yaw, &Pitch)
+	i.MetaData = i.Read(0)
+	// TODO
+}
+
+func (i AddEntity) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.RawUUID[:], i.Username, i.EntityID,
+		i.X, i.Y, i.Z,
+		i.SpeedX, i.SpeedY, i.SpeedZ,
+		i.Yaw, i.HeadRot)
+	buf.Write(0x7f)
+	buf.BatchWrite(i.Link1, i.Link2, i.Link3)
+	return buf
+}
 
 type RemoveEntity struct {
-	Eid uint64
+	EntityID uint64
 }
 
-// Pid implements Packet interface.
-func (i *RemoveEntity) Pid() byte { return RemoveEntityHead }
+func (i RemoveEntity) Pid() byte { return RemoveEntityHead }
 
-// Read implements Packet interface.
 func (i *RemoveEntity) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
+	i.EntityID = buf.ReadLong()
 }
 
-// Write implements Packet interface.
-func (i *RemoveEntity) Write() *buffer.Buffer {
+func (i RemoveEntity) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	return buf
 }
 
 type AddItemEntity struct {
-	Eid    uint64
-	X      float32
-	Y      float32
-	Z      float32
-	SpeedX float32
-	SpeedY float32
-	SpeedZ float32
+	EntityID uint64
+	X        float32
+	Y        float32
+	Z        float32
+	SpeedX   float32
+	SpeedY   float32
+	SpeedZ   float32
 }
 
-// Pid implements Packet interface.
-func (i *AddItemEntity) Pid() byte { return AddItemEntityHead }
+func (i AddItemEntity) Pid() byte { return AddItemEntityHead }
 
-// Read implements Packet interface.
 func (i *AddItemEntity) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
-	// Unexpected code:Slot Item
-	i.Float = buf.ReadX()
-	i.Float = buf.ReadY()
-	i.Float = buf.ReadZ()
-	i.Float = buf.ReadSpeedX()
-	i.Float = buf.ReadSpeedY()
-	i.Float = buf.ReadSpeedZ()
+	i.EntityID = buf.ReadLong()
+	// TODO: implement slot functions
+	i.X = buf.ReadFloat()
+	i.Y = buf.ReadFloat()
+	i.Z = buf.ReadFloat()
+	i.SpeedX = buf.ReadFloat()
+	i.SpeedY = buf.ReadFloat()
+	i.SpeedZ = buf.ReadFloat()
 }
 
-// Write implements Packet interface.
-func (i *AddItemEntity) Write() *buffer.Buffer {
+func (i AddItemEntity) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
-	// Unexpected code:Slot Item
+	buf.WriteLong(i.EntityID)
+	buf.BatchWrite(uint16(1), byte(1), uint16(1), uint16(0)) //TODO
 	buf.WriteFloat(i.X)
 	buf.WriteFloat(i.Y)
 	buf.WriteFloat(i.Z)
@@ -492,62 +463,56 @@ func (i *AddItemEntity) Write() *buffer.Buffer {
 }
 
 type TakeItemEntity struct {
-	Target uint64
-	Eid    uint64
+	Target   uint64
+	EntityID uint64
 }
 
-// Pid implements Packet interface.
-func (i *TakeItemEntity) Pid() byte { return TakeItemEntityHead }
+func (i TakeItemEntity) Pid() byte { return TakeItemEntityHead }
 
-// Read implements Packet interface.
 func (i *TakeItemEntity) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadTarget()
-	i.Long = buf.ReadEid()
+	i.Target = buf.ReadLong()
+	i.EntityID = buf.ReadLong()
 }
 
-// Write implements Packet interface.
-func (i *TakeItemEntity) Write() *buffer.Buffer {
+func (i TakeItemEntity) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteLong(i.Target)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::MOVE_ENTITY_PACKET;
-//
-//
-// 	// eid, x, y, z, yaw, pitch
-// 	/** @var array[] */
-// 	public $entities = [];
-//
-// 	public function clean(){
-// 		$this->entities = [];
-// 		return parent::clean();
-// 	}
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putInt(count($this->entities));
-// 		foreach($this->entities as $d){
-// 			$this->putLong($d[0]); //eid
-// 			$this->putFloat($d[1]); //x
-// 			$this->putFloat($d[2]); //y
-// 			$this->putFloat($d[3]); //z
-// 			$this->putFloat($d[4]); //yaw
-// 			$this->putFloat($d[5]); //headYaw
-// 			$this->putFloat($d[6]); //pitch
-// 		}
-// 	}
-//
-//
+type MoveEntity struct {
+	EntityIDs []uint64
+	EntityPos [][6]float32 // X, Y, Z, Yaw, HeadYaw, Pitch
+}
+
+func (i MoveEntity) Pid() byte { return MoveEntityHead }
+
+func (i *MoveEntity) Read(buf *buffer.Buffer) {
+	entityCnt = buf.ReadInt()
+	i.EntityIDs = make([]uint64, entityCnt)
+	i.EntityPos = make([][6]float32, entityCnt)
+	for j := uint32(0); j < entityCnt; j++ {
+		i.EntityIDs[j] = buf.ReadLong()
+		for k := 0; k < 6; k++ {
+			i.EntityPos[i] = buf.ReadFloat()
+		}
+	}
+}
+
+func (i *MoveEntity) Write(buf *buffer.Buffer) {
+	if len(i.EntityIDs) != len(i.EntityPos) {
+		panic("Entity data slice length mismatch")
+	}
+	buf := new(buffer.Buffer)
+	buf.WriteInt(len(i.EntityIDs))
+	for k, e := range i.EntityIDs {
+		buf.WriteLong(e)
+		for j := 0; j < 6; j++ {
+			buf.WriteFloat(i.EntityPos[k][j])
+		}
+	}
+}
 
 const (
 	ModeNormal   byte = 0
@@ -556,7 +521,7 @@ const (
 )
 
 type MovePlayer struct {
-	Eid      uint64
+	EntityID uint64
 	X        float32
 	Y        float32
 	Z        float32
@@ -567,26 +532,23 @@ type MovePlayer struct {
 	OnGround byte
 }
 
-// Pid implements Packet interface.
-func (i *MovePlayer) Pid() byte { return MovePlayerHead }
+func (i MovePlayer) Pid() byte { return MovePlayerHead }
 
-// Read implements Packet interface.
 func (i *MovePlayer) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
-	i.Float = buf.ReadX()
-	i.Float = buf.ReadY()
-	i.Float = buf.ReadZ()
-	i.Float = buf.ReadYaw()
-	i.Float = buf.ReadBodyYaw()
-	i.Float = buf.ReadPitch()
-	i.Byte = buf.ReadMode()
-	i.Byte = buf.ReadOnGround()
+	i.EntityID = buf.ReadLong()
+	i.X = buf.ReadFloat()
+	i.Y = buf.ReadFloat()
+	i.Z = buf.ReadFloat()
+	i.Yaw = buf.ReadFloat()
+	i.BodyYaw = buf.ReadFloat()
+	i.Pitch = buf.ReadFloat()
+	i.Mode = buf.ReadByte()
+	i.OnGround = buf.ReadByte()
 }
 
-// Write implements Packet interface.
-func (i *MovePlayer) Write() *buffer.Buffer {
+func (i MovePlayer) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	buf.WriteFloat(i.X)
 	buf.WriteFloat(i.Y)
 	buf.WriteFloat(i.Z)
@@ -598,56 +560,76 @@ func (i *MovePlayer) Write() *buffer.Buffer {
 	return buf
 }
 
-type RemoveBlock struct{}
+type RemoveBlock struct {
+	EntityID uint64
+	X, Z     uint32
+	Y        byte
+}
 
-// Pid implements Packet interface.
-func (i *RemoveBlock) Pid() byte { return RemoveBlockHead }
+func (i RemoveBlock) Pid() byte { return RemoveBlockHead }
 
-// Read implements Packet interface.
-func (i *RemoveBlock) Read(buf *buffer.Buffer) {}
+func (i *RemoveBlock) Read(buf *buffer.Buffer) {
+	i.EntityID = buf.ReadLong()
+	i.X = buf.Readint()
+	i.Z = buf.ReadInt()
+	i.Y = buf.ReadByte()
+}
 
-// Write implements Packet interface.
-func (i *RemoveBlock) Write() *buffer.Buffer {
+func (i RemoveBlock) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
+	buf.WriteLong(i.EntityID)
+	buf.WriteInt(i.X)
+	buf.WriteInt(i.Z)
+	buf.WriteByte(i.Y)
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::UPDATE_BLOCK_PACKET;
-//
-// 	const FLAG_NONE      = 0b0000;
-// 	const FLAG_NEIGHBORS = 0b0001;
-//     const FLAG_NETWORK   = 0b0010;
-// 	const FLAG_NOGRAPHIC = 0b0100;
-// 	const FLAG_PRIORITY  = 0b1000;
-//
-// 	const FLAG_ALL = (self::FLAG_NEIGHBORS | self::FLAG_NETWORK);
-// 	const FLAG_ALL_PRIORITY = (self::FLAG_ALL | self::FLAG_PRIORITY);
-//
-// 	public $records = []; //x, z, y, blockId, blockData, flags
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putInt(count($this->records));
-// 		foreach($this->records as $r){
-// 			$this->putInt($r[0]);
-// 			$this->putInt($r[1]);
-// 			$this->putByte($r[2]);
-// 			$this->putByte($r[3]);
-// 			$this->putByte(($r[5] << 4) | $r[4]);
-// 		}
-// 	}
-//
+const (
+	UpdateNone byte = 1<<iota - 1
+	UpdateNeighbors
+	UpdateNetwork
+	UpdateNographic
+	UpdatePriority
+	UpdateAll         = UpdateNeighbors | UpdateNetwork
+	UpdateAllPriority = UpdateAll | UpdatePriority
+)
+
+type BlockRecord struct {
+	X, Z            uint32
+	Y               byte
+	ID, Meta, Flags byte
+}
+
+type UpdateBlock struct {
+	BlockRecords []BlockRecord
+}
+
+func (i UpdateBlock) Pid() byte { return UpdateBlockHead }
+
+func (i *UpdateBlock) Read(buf *buffer.Buffer) {
+	records := buf.ReadInt()
+	i.BlockRecords = make([]BlockRecord, records)
+	for k := 0; k < records; k++ {
+		x := buf.ReadInt()
+		z := buf.ReadInt()
+		y := buf.ReadByte()
+		id := buf.ReadByte()
+		flagMeta := buf.ReadByte()
+		i[k] = BlockRecord{X: x, Y: y, Z: z, ID: id, Meta: flagMeta & 0x0f, Flags: (flagMeta >> 4) & 0x0f}
+	}
+}
+
+func (i UpdateBlock) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.WriteInt(len(i.BlockRecords))
+	for _, record := range i.BlockRecords {
+		i.BatchWrite(record.X, record.Z, record.Y, record.ID, (record.Flags<<4 | record.Meta))
+	}
+	return buf
+}
 
 type AddPainting struct {
-	Eid       uint64
+	EntityID  uint64
 	X         uint32
 	Y         uint32
 	Z         uint32
@@ -655,23 +637,20 @@ type AddPainting struct {
 	Title     string
 }
 
-// Pid implements Packet interface.
-func (i *AddPainting) Pid() byte { return AddPaintingHead }
+func (i AddPainting) Pid() byte { return AddPaintingHead }
 
-// Read implements Packet interface.
 func (i *AddPainting) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
-	i.Int = buf.ReadX()
-	i.Int = buf.ReadY()
-	i.Int = buf.ReadZ()
-	i.Int = buf.ReadDirection()
-	i.String = buf.ReadTitle()
+	i.EntityID = buf.ReadLong()
+	i.X = buf.ReadInt()
+	i.Y = buf.ReadInt()
+	i.Z = buf.ReadInt()
+	i.Direction = buf.ReadInt()
+	i.Title = buf.ReadString()
 }
 
-// Write implements Packet interface.
-func (i *AddPainting) Write() *buffer.Buffer {
+func (i AddPainting) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	buf.WriteInt(i.X)
 	buf.WriteInt(i.Y)
 	buf.WriteInt(i.Z)
@@ -680,43 +659,7 @@ func (i *AddPainting) Write() *buffer.Buffer {
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::EXPLODE_PACKET;
-//
-// 	public $x;
-// 	public $y;
-// 	public $z;
-// 	public $radius;
-// 	public $records = [];
-//
-// 	public function clean(){
-// 		$this->records = [];
-// 		return parent::clean();
-// 	}
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putFloat($this->x);
-// 		$this->putFloat($this->y);
-// 		$this->putFloat($this->z);
-// 		$this->putFloat($this->radius);
-// 		$this->putInt(count($this->records));
-// 		if(count($this->records) > 0){
-// 			foreach($this->records as $record){
-// 				$this->putByte($record->x);
-// 				$this->putByte($record->y);
-// 				$this->putByte($record->z);
-// 			}
-// 		}
-// 	}
-//
+// TODO: Explode
 
 const (
 	EventSoundClick            byte = 1000
@@ -757,20 +700,17 @@ type LevelEvent struct {
 	Data uint32
 }
 
-// Pid implements Packet interface.
-func (i *LevelEvent) Pid() byte { return LevelEventHead }
+func (i LevelEvent) Pid() byte { return LevelEventHead }
 
-// Read implements Packet interface.
 func (i *LevelEvent) Read(buf *buffer.Buffer) {
-	i.Short = buf.ReadEvid()
-	i.Float = buf.ReadX()
-	i.Float = buf.ReadY()
-	i.Float = buf.ReadZ()
-	i.Int = buf.ReadData()
+	i.Evid = buf.ReadShort()
+	i.X = buf.ReadFloat()
+	i.Y = buf.ReadFloat()
+	i.Z = buf.ReadFloat()
+	i.Data = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *LevelEvent) Write() *buffer.Buffer {
+func (i LevelEvent) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteShort(i.Evid)
 	buf.WriteFloat(i.X)
@@ -788,20 +728,17 @@ type BlockEvent struct {
 	Case uint32
 }
 
-// Pid implements Packet interface.
-func (i *BlockEvent) Pid() byte { return BlockEventHead }
+func (i BlockEvent) Pid() byte { return BlockEventHead }
 
-// Read implements Packet interface.
 func (i *BlockEvent) Read(buf *buffer.Buffer) {
-	i.Int = buf.ReadX()
-	i.Int = buf.ReadY()
-	i.Int = buf.ReadZ()
-	i.Int = buf.ReadCase()
-	i.Int = buf.ReadCase()
+	i.X = buf.ReadInt()
+	i.Y = buf.ReadInt()
+	i.Z = buf.ReadInt()
+	i.Case = buf.ReadInt()
+	i.Case = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *BlockEvent) Write() *buffer.Buffer {
+func (i BlockEvent) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(i.X)
 	buf.WriteInt(i.Y)
@@ -829,23 +766,20 @@ const (
 )
 
 type EntityEvent struct {
-	Eid   uint64
-	Event byte
+	EntityID uint64
+	Event    byte
 }
 
-// Pid implements Packet interface.
-func (i *EntityEvent) Pid() byte { return EntityEventHead }
+func (i EntityEvent) Pid() byte { return EntityEventHead }
 
-// Read implements Packet interface.
 func (i *EntityEvent) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
-	i.Byte = buf.ReadEvent()
+	i.EntityID = buf.ReadLong()
+	i.Event = buf.ReadByte()
 }
 
-// Write implements Packet interface.
-func (i *EntityEvent) Write() *buffer.Buffer {
+func (i EntityEvent) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	buf.WriteByte(i.Event)
 	return buf
 }
@@ -857,7 +791,7 @@ const (
 )
 
 type MobEffect struct {
-	Eid       uint64
+	EntityID  uint64
 	EventId   byte
 	EffectId  byte
 	Amplifier byte
@@ -865,23 +799,20 @@ type MobEffect struct {
 	Duration  uint32
 }
 
-// Pid implements Packet interface.
-func (i *MobEffect) Pid() byte { return MobEffectHead }
+func (i MobEffect) Pid() byte { return MobEffectHead }
 
-// Read implements Packet interface.
 func (i *MobEffect) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
-	i.Byte = buf.ReadEventId()
-	i.Byte = buf.ReadEffectId()
-	i.Byte = buf.ReadAmplifier()
-	i.Byte = buf.ReadParticles()
-	i.Int = buf.ReadDuration()
+	i.EntityID = buf.ReadLong()
+	i.EventId = buf.ReadByte()
+	i.EffectId = buf.ReadByte()
+	i.Amplifier = buf.ReadByte()
+	i.Particles = buf.ReadByte()
+	i.Duration = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *MobEffect) Write() *buffer.Buffer {
+func (i MobEffect) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	buf.WriteByte(i.EventId)
 	buf.WriteByte(i.EffectId)
 	buf.WriteByte(i.Amplifier)
@@ -923,26 +854,23 @@ func (i *MobEffect) Write() *buffer.Buffer {
 //
 
 type MobEquipment struct {
-	Eid          uint64
+	EntityID     uint64
 	Slot         byte
 	SelectedSlot byte
 }
 
-// Pid implements Packet interface.
-func (i *MobEquipment) Pid() byte { return MobEquipmentHead }
+func (i MobEquipment) Pid() byte { return MobEquipmentHead }
 
-// Read implements Packet interface.
 func (i *MobEquipment) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
+	i.EntityID = buf.ReadLong()
 	// Unexpected code:Slot Item
-	i.Byte = buf.ReadSlot()
-	i.Byte = buf.ReadSelectedSlot()
+	i.Slot = buf.ReadByte()
+	i.SelectedSlot = buf.ReadByte()
 }
 
-// Write implements Packet interface.
-func (i *MobEquipment) Write() *buffer.Buffer {
+func (i MobEquipment) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	// Unexpected code:Slot Item
 	buf.WriteByte(i.Slot)
 	buf.WriteByte(i.SelectedSlot)
@@ -950,25 +878,22 @@ func (i *MobEquipment) Write() *buffer.Buffer {
 }
 
 type MobArmorEquipment struct {
-	Eid uint64
+	EntityID uint64
 }
 
-// Pid implements Packet interface.
-func (i *MobArmorEquipment) Pid() byte { return MobArmorEquipmentHead }
+func (i MobArmorEquipment) Pid() byte { return MobArmorEquipmentHead }
 
-// Read implements Packet interface.
 func (i *MobArmorEquipment) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
+	i.EntityID = buf.ReadLong()
 	// Unexpected code:Slot Slots
 	// Unexpected code:Slot Slots
 	// Unexpected code:Slot Slots
 	// Unexpected code:Slot Slots
 }
 
-// Write implements Packet interface.
-func (i *MobArmorEquipment) Write() *buffer.Buffer {
+func (i MobArmorEquipment) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	// Unexpected code:Slot Slots
 	// Unexpected code:Slot Slots
 	// Unexpected code:Slot Slots
@@ -981,17 +906,14 @@ type Interact struct {
 	Target uint64
 }
 
-// Pid implements Packet interface.
-func (i *Interact) Pid() byte { return InteractHead }
+func (i Interact) Pid() byte { return InteractHead }
 
-// Read implements Packet interface.
 func (i *Interact) Read(buf *buffer.Buffer) {
-	i.Byte = buf.ReadAction()
-	i.Long = buf.ReadTarget()
+	i.Action = buf.ReadByte()
+	i.Target = buf.ReadLong()
 }
 
-// Write implements Packet interface.
-func (i *Interact) Write() *buffer.Buffer {
+func (i Interact) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteByte(i.Action)
 	buf.WriteLong(i.Target)
@@ -1000,14 +922,11 @@ func (i *Interact) Write() *buffer.Buffer {
 
 type UseItem struct{}
 
-// Pid implements Packet interface.
-func (i *UseItem) Pid() byte { return UseItemHead }
+func (i UseItem) Pid() byte { return UseItemHead }
 
-// Read implements Packet interface.
 func (i *UseItem) Read(buf *buffer.Buffer) {}
 
-// Write implements Packet interface.
-func (i *UseItem) Write() *buffer.Buffer {
+func (i UseItem) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	return buf
 }
@@ -1028,31 +947,28 @@ const (
 )
 
 type PlayerAction struct {
-	Eid    uint64
-	Action uint32
-	X      uint32
-	Y      uint32
-	Z      uint32
-	Face   uint32
+	EntityID uint64
+	Action   uint32
+	X        uint32
+	Y        uint32
+	Z        uint32
+	Face     uint32
 }
 
-// Pid implements Packet interface.
-func (i *PlayerAction) Pid() byte { return PlayerActionHead }
+func (i PlayerAction) Pid() byte { return PlayerActionHead }
 
-// Read implements Packet interface.
 func (i *PlayerAction) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadEid()
-	i.Int = buf.ReadAction()
-	i.Int = buf.ReadX()
-	i.Int = buf.ReadY()
-	i.Int = buf.ReadZ()
-	i.Int = buf.ReadFace()
+	i.EntityID = buf.ReadLong()
+	i.Action = buf.ReadInt()
+	i.X = buf.ReadInt()
+	i.Y = buf.ReadInt()
+	i.Z = buf.ReadInt()
+	i.Face = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *PlayerAction) Write() *buffer.Buffer {
+func (i PlayerAction) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	buf.WriteInt(i.Action)
 	buf.WriteInt(i.X)
 	buf.WriteInt(i.Y)
@@ -1065,16 +981,13 @@ type HurtArmor struct {
 	Health byte
 }
 
-// Pid implements Packet interface.
-func (i *HurtArmor) Pid() byte { return HurtArmorHead }
+func (i HurtArmor) Pid() byte { return HurtArmorHead }
 
-// Read implements Packet interface.
 func (i *HurtArmor) Read(buf *buffer.Buffer) {
-	i.Byte = buf.ReadHealth()
+	i.Health = buf.ReadByte()
 }
 
-// Write implements Packet interface.
-func (i *HurtArmor) Write() *buffer.Buffer {
+func (i HurtArmor) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteByte(i.Health)
 	return buf
@@ -1086,7 +999,7 @@ func (i *HurtArmor) Write() *buffer.Buffer {
 //
 // 	const NETWORK_ID = Info::SET_ENTITY_DATA_PACKET;
 //
-// 	public $eid;
+// 	public $EntityID;
 // 	public $metadata;
 //
 // 	public function decode(){
@@ -1095,7 +1008,7 @@ func (i *HurtArmor) Write() *buffer.Buffer {
 //
 // 	public function encode(){
 // 		$this->reset();
-// 		$this->putLong($this->eid);
+// 		$this->putLong($this->EntityID);
 // 		$meta = Binary::writeMetadata($this->metadata);
 // 		$this->put($meta);
 // 	}
@@ -1109,7 +1022,7 @@ func (i *HurtArmor) Write() *buffer.Buffer {
 // 	const NETWORK_ID = Info::SET_ENTITY_MOTION_PACKET;
 //
 //
-// 	// eid, motX, motY, motZ
+// 	// EntityID, motX, motY, motZ
 // 	/** @var array[] */
 // 	public $entities = [];
 //
@@ -1126,7 +1039,7 @@ func (i *HurtArmor) Write() *buffer.Buffer {
 // 		$this->reset();
 // 		$this->putInt(count($this->entities));
 // 		foreach($this->entities as $d){
-// 			$this->putLong($d[0]); //eid
+// 			$this->putLong($d[0]); //EntityID
 // 			$this->putFloat($d[1]); //motX
 // 			$this->putFloat($d[2]); //motY
 // 			$this->putFloat($d[3]); //motZ
@@ -1141,18 +1054,15 @@ type SetEntityLink struct {
 	Type byte
 }
 
-// Pid implements Packet interface.
-func (i *SetEntityLink) Pid() byte { return SetEntityLinkHead }
+func (i SetEntityLink) Pid() byte { return SetEntityLinkHead }
 
-// Read implements Packet interface.
 func (i *SetEntityLink) Read(buf *buffer.Buffer) {
-	i.Long = buf.ReadFrom()
-	i.Long = buf.ReadTo()
-	i.Byte = buf.ReadType()
+	i.From = buf.ReadLong()
+	i.To = buf.ReadLong()
+	i.Type = buf.ReadByte()
 }
 
-// Write implements Packet interface.
-func (i *SetEntityLink) Write() *buffer.Buffer {
+func (i SetEntityLink) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteLong(i.From)
 	buf.WriteLong(i.To)
@@ -1164,16 +1074,13 @@ type SetHealth struct {
 	Health uint32
 }
 
-// Pid implements Packet interface.
-func (i *SetHealth) Pid() byte { return SetHealthHead }
+func (i SetHealth) Pid() byte { return SetHealthHead }
 
-// Read implements Packet interface.
 func (i *SetHealth) Read(buf *buffer.Buffer) {
-	i.Int = buf.ReadHealth()
+	i.Health = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *SetHealth) Write() *buffer.Buffer {
+func (i SetHealth) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(i.Health)
 	return buf
@@ -1185,18 +1092,15 @@ type SetSpawnPosition struct {
 	Z uint32
 }
 
-// Pid implements Packet interface.
-func (i *SetSpawnPosition) Pid() byte { return SetSpawnPositionHead }
+func (i SetSpawnPosition) Pid() byte { return SetSpawnPositionHead }
 
-// Read implements Packet interface.
 func (i *SetSpawnPosition) Read(buf *buffer.Buffer) {
-	i.Int = buf.ReadX()
-	i.Int = buf.ReadY()
-	i.Int = buf.ReadZ()
+	i.X = buf.ReadInt()
+	i.Y = buf.ReadInt()
+	i.Z = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *SetSpawnPosition) Write() *buffer.Buffer {
+func (i SetSpawnPosition) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(i.X)
 	buf.WriteInt(i.Y)
@@ -1205,24 +1109,21 @@ func (i *SetSpawnPosition) Write() *buffer.Buffer {
 }
 
 type Animate struct {
-	Action byte
-	Eid    uint64
+	Action   byte
+	EntityID uint64
 }
 
-// Pid implements Packet interface.
-func (i *Animate) Pid() byte { return AnimateHead }
+func (i Animate) Pid() byte { return AnimateHead }
 
-// Read implements Packet interface.
 func (i *Animate) Read(buf *buffer.Buffer) {
-	i.Byte = buf.ReadAction()
-	i.Long = buf.ReadEid()
+	i.Action = buf.ReadByte()
+	i.EntityID = buf.ReadLong()
 }
 
-// Write implements Packet interface.
-func (i *Animate) Write() *buffer.Buffer {
+func (i Animate) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteByte(i.Action)
-	buf.WriteLong(i.Eid)
+	buf.WriteLong(i.EntityID)
 	return buf
 }
 
@@ -1232,18 +1133,15 @@ type Respawn struct {
 	Z float32
 }
 
-// Pid implements Packet interface.
-func (i *Respawn) Pid() byte { return RespawnHead }
+func (i Respawn) Pid() byte { return RespawnHead }
 
-// Read implements Packet interface.
 func (i *Respawn) Read(buf *buffer.Buffer) {
-	i.Float = buf.ReadX()
-	i.Float = buf.ReadY()
-	i.Float = buf.ReadZ()
+	i.X = buf.ReadFloat()
+	i.Y = buf.ReadFloat()
+	i.Z = buf.ReadFloat()
 }
 
-// Write implements Packet interface.
-func (i *Respawn) Write() *buffer.Buffer {
+func (i Respawn) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteFloat(i.X)
 	buf.WriteFloat(i.Y)
@@ -1253,14 +1151,11 @@ func (i *Respawn) Write() *buffer.Buffer {
 
 type DropItem struct{}
 
-// Pid implements Packet interface.
-func (i *DropItem) Pid() byte { return DropItemHead }
+func (i DropItem) Pid() byte { return DropItemHead }
 
-// Read implements Packet interface.
 func (i *DropItem) Read(buf *buffer.Buffer) {}
 
-// Write implements Packet interface.
-func (i *DropItem) Write() *buffer.Buffer {
+func (i DropItem) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	return buf
 }
@@ -1274,21 +1169,18 @@ type ContainerOpen struct {
 	Z        uint32
 }
 
-// Pid implements Packet interface.
-func (i *ContainerOpen) Pid() byte { return ContainerOpenHead }
+func (i ContainerOpen) Pid() byte { return ContainerOpenHead }
 
-// Read implements Packet interface.
 func (i *ContainerOpen) Read(buf *buffer.Buffer) {
-	i.Byte = buf.ReadWindowid()
-	i.Byte = buf.ReadType()
-	i.Short = buf.ReadSlots()
-	i.Int = buf.ReadX()
-	i.Int = buf.ReadY()
-	i.Int = buf.ReadZ()
+	i.Windowid = buf.ReadByte()
+	i.Type = buf.ReadByte()
+	i.Slots = buf.ReadShort()
+	i.X = buf.ReadInt()
+	i.Y = buf.ReadInt()
+	i.Z = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *ContainerOpen) Write() *buffer.Buffer {
+func (i ContainerOpen) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteByte(i.Windowid)
 	buf.WriteByte(i.Type)
@@ -1303,16 +1195,13 @@ type ContainerClose struct {
 	Windowid byte
 }
 
-// Pid implements Packet interface.
-func (i *ContainerClose) Pid() byte { return ContainerCloseHead }
+func (i ContainerClose) Pid() byte { return ContainerCloseHead }
 
-// Read implements Packet interface.
 func (i *ContainerClose) Read(buf *buffer.Buffer) {
-	i.Byte = buf.ReadWindowid()
+	i.Windowid = buf.ReadByte()
 }
 
-// Write implements Packet interface.
-func (i *ContainerClose) Write() *buffer.Buffer {
+func (i ContainerClose) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteByte(i.Windowid)
 	return buf
@@ -1324,19 +1213,16 @@ type ContainerSetSlot struct {
 	HotbarSlot uint16
 }
 
-// Pid implements Packet interface.
-func (i *ContainerSetSlot) Pid() byte { return ContainerSetSlotHead }
+func (i ContainerSetSlot) Pid() byte { return ContainerSetSlotHead }
 
-// Read implements Packet interface.
 func (i *ContainerSetSlot) Read(buf *buffer.Buffer) {
-	i.Byte = buf.ReadWindowid()
-	i.Short = buf.ReadSlot()
-	i.Short = buf.ReadHotbarSlot()
+	i.Windowid = buf.ReadByte()
+	i.Slot = buf.ReadShort()
+	i.HotbarSlot = buf.ReadShort()
 	// Unexpected code:Slot Item
 }
 
-// Write implements Packet interface.
-func (i *ContainerSetSlot) Write() *buffer.Buffer {
+func (i ContainerSetSlot) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteByte(i.Windowid)
 	buf.WriteShort(i.Slot)
@@ -1351,18 +1237,15 @@ type ContainerSetData struct {
 	Value    uint16
 }
 
-// Pid implements Packet interface.
-func (i *ContainerSetData) Pid() byte { return ContainerSetDataHead }
+func (i ContainerSetData) Pid() byte { return ContainerSetDataHead }
 
-// Read implements Packet interface.
 func (i *ContainerSetData) Read(buf *buffer.Buffer) {
-	i.Byte = buf.ReadWindowid()
-	i.Short = buf.ReadProperty()
-	i.Short = buf.ReadValue()
+	i.Windowid = buf.ReadByte()
+	i.Property = buf.ReadShort()
+	i.Value = buf.ReadShort()
 }
 
-// Write implements Packet interface.
-func (i *ContainerSetData) Write() *buffer.Buffer {
+func (i ContainerSetData) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteByte(i.Windowid)
 	buf.WriteShort(i.Property)
@@ -1566,14 +1449,11 @@ func (i *ContainerSetData) Write() *buffer.Buffer {
 
 type CraftingEvent struct{}
 
-// Pid implements Packet interface.
-func (i *CraftingEvent) Pid() byte { return CraftingEventHead }
+func (i CraftingEvent) Pid() byte { return CraftingEventHead }
 
-// Read implements Packet interface.
 func (i *CraftingEvent) Read(buf *buffer.Buffer) {}
 
-// Write implements Packet interface.
-func (i *CraftingEvent) Write() *buffer.Buffer {
+func (i CraftingEvent) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	return buf
 }
@@ -1582,16 +1462,13 @@ type AdventureSettings struct {
 	Flags uint32
 }
 
-// Pid implements Packet interface.
-func (i *AdventureSettings) Pid() byte { return AdventureSettingsHead }
+func (i AdventureSettings) Pid() byte { return AdventureSettingsHead }
 
-// Read implements Packet interface.
 func (i *AdventureSettings) Read(buf *buffer.Buffer) {
-	i.Int = buf.ReadFlags()
+	i.Flags = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *AdventureSettings) Write() *buffer.Buffer {
+func (i AdventureSettings) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(i.Flags)
 	return buf
@@ -1603,19 +1480,16 @@ type BlockEntityData struct {
 	Z uint32
 }
 
-// Pid implements Packet interface.
-func (i *BlockEntityData) Pid() byte { return BlockEntityDataHead }
+func (i BlockEntityData) Pid() byte { return BlockEntityDataHead }
 
-// Read implements Packet interface.
 func (i *BlockEntityData) Read(buf *buffer.Buffer) {
-	i.Int = buf.ReadX()
-	i.Int = buf.ReadY()
-	i.Int = buf.ReadZ()
+	i.X = buf.ReadInt()
+	i.Y = buf.ReadInt()
+	i.Z = buf.ReadInt()
 	// Unexpected code: Namedtag
 }
 
-// Write implements Packet interface.
-func (i *BlockEntityData) Write() *buffer.Buffer {
+func (i BlockEntityData) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(i.X)
 	buf.WriteInt(i.Y)
@@ -1635,19 +1509,16 @@ type FullChunkData struct {
 	Order  byte
 }
 
-// Pid implements Packet interface.
-func (i *FullChunkData) Pid() byte { return FullChunkDataHead }
+func (i FullChunkData) Pid() byte { return FullChunkDataHead }
 
-// Read implements Packet interface.
 func (i *FullChunkData) Read(buf *buffer.Buffer) {
-	i.Int = buf.ReadChunkX()
-	i.Int = buf.ReadChunkZ()
-	i.Byte = buf.ReadOrder()
+	i.ChunkX = buf.ReadInt()
+	i.ChunkZ = buf.ReadInt()
+	i.Order = buf.ReadByte()
 	i.Data = buf.Read(buf.ReadInt())
 }
 
-// Write implements Packet interface.
-func (i *FullChunkData) Write() *buffer.Buffer {
+func (i FullChunkData) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(i.ChunkX)
 	buf.WriteInt(i.ChunkZ)
@@ -1660,17 +1531,72 @@ type SetDifficulty struct {
 	Difficulty uint32
 }
 
-// Pid implements Packet interface.
-func (i *SetDifficulty) Pid() byte { return SetDifficultyHead }
+func (i SetDifficulty) Pid() byte { return SetDifficultyHead }
 
-// Read implements Packet interface.
 func (i *SetDifficulty) Read(buf *buffer.Buffer) {
-	i.Int = buf.ReadDifficulty()
+	i.Difficulty = buf.ReadInt()
 }
 
-// Write implements Packet interface.
-func (i *SetDifficulty) Write() *buffer.Buffer {
+func (i SetDifficulty) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(i.Difficulty)
 	return buf
 }
+
+type SetPlayerGametype struct {
+	Gamemode uint32
+}
+
+func (i SetPlayerGametype) Pid() byte { return SetPlayerGametypeHead }
+
+func (i *SetPlayerGametype) Read(buf *buffer.Buffer) {
+	i.Gamemode = buf.ReadInt()
+}
+
+func (i SetPlayerGametype) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.WriteInt(i.Gamemode)
+	return buf
+}
+
+// An exception was thrown while parsing/converting PocketMine-MP protocol.
+// Please read original PHP code and port it manually.
+// Exception: string index out of range
+//
+// 	const NETWORK_ID = Info::PLAYER_LIST_PACKET;
+//
+// 	const TYPE_ADD = 0;
+// 	const TYPE_REMOVE = 1;
+//
+// 	//REMOVE: UUID, ADD: UUID, entity id, name, isSlim, skin
+// 	/** @var array[] */
+// 	public $entries = [];
+// 	public $type;
+//
+// 	public function clean(){
+// 		$this->entries = [];
+// 		return parent::clean();
+// 	}
+//
+// 	public function decode(){
+//
+// 	}
+//
+// 	public function encode(){
+// 		$this->reset();
+// 		$this->putByte($this->type);
+// 		$this->putInt(count($this->entries));
+// 		foreach($this->entries as $d){
+// 			if($this->type === self::TYPE_ADD){
+// 				$this->putUUID($d[0]);
+// 				$this->putLong($d[1]);
+// 				$this->putString($d[2]);
+// 				$this->putString($d[3]);
+// 				$this->putString($d[4]);
+// 			}else{
+// 				$this->putUUID($d[0]);
+// 			}
+// 		}
+// 	}
+//
+//

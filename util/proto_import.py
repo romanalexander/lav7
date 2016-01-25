@@ -153,7 +153,7 @@ def parse_coder(codelist):
 
 targets = list(get_targets())
 def get_go_code(n: int):
-    if targets[n][1] == "Batch":
+    if targets[n][1][:5] == "Batch":
         f.write(batch_hardcoded)
         return
     out = ""
@@ -192,13 +192,13 @@ def get_go_code(n: int):
     else:
         out += "type %s struct{}\n" % targets[n][0]
 
-    out += "// Pid implements Packet interface.\nfunc (i *%s) Pid() byte { return %sHead }\n\n" % (targets[n][0], targets[n][0])
+    out += "// Pid implements Packet interface.\nfunc (i %s) Pid() byte { return %sHead }\n\n" % (targets[n][0], targets[n][0])
 
     if len(fields) > 0:
         out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){\n" % targets[n][0]
         for i, field in enumerate(fields):
             if field[0] in phpType:
-                out += "    i.%s = buf.Read%s()\n" % tuple(field)
+                out += "    i.%s = buf.Read%s()\n" % (field[1], field[0])
             elif field[0][:9] == "LengthOf_":
                 out += "    i.%s = buf.Read(buf.Read%s())\n"%  (field[1], field[0][9:])
             elif field[0] == "" and fields[i-1][0][:9] == "LengthOf_" and fields[i-1][1] == field[1]:
@@ -209,7 +209,7 @@ def get_go_code(n: int):
     else:
         out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){}\n" % targets[n][0]
 
-    out += "// Write implements Packet interface.\nfunc (i *%s) Write() *buffer.Buffer{\n    buf := new(buffer.Buffer)\n" % targets[n][0]
+    out += "// Write implements Packet interface.\nfunc (i %s) Write() *buffer.Buffer{\n    buf := new(buffer.Buffer)\n" % targets[n][0]
     for i, field in enumerate(fields):
         if field[0] in phpType:
             out += "    buf.Write%s(i.%s)\n" % tuple(field)

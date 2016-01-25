@@ -2,6 +2,14 @@ package level
 
 import "github.com/L7-MCPE/lav7/level/gen"
 
+const (
+	DayTime     = 0
+	SunsetTime  = 12000
+	NightTime   = 14000
+	SunriseTime = 23000
+	FullTime    = 24000
+)
+
 // Level is a interface for storing block chunks, entities, tile objects, etc.
 type Level interface {
 	Init()
