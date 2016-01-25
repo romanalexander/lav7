@@ -95,7 +95,7 @@ func (l Level) GetBlock(x, y, z int32) byte {
 	return c.GetBlock(byte(x&0xf), byte(y), byte(z&0xf))
 }
 
-func (l *Level) SetBlock(x, y, z int32, b byte) {
+func (l *Level) SetBlock(x int32, y byte, z int32, b byte) {
 	c := l.GetChunk(x>>4, z>>4, true)
 	c.Mutex().Lock()
 	defer c.Mutex().Unlock()

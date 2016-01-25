@@ -139,7 +139,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 	case *RemoveBlock:
 		pk := pk.(*RemoveBlock)
 		util.Debug("Rm:", pk.X, pk.Y, pk.Z)
-		p.Level.SetBlock(pk.X, int32(pk.Y), pk.Z, 0) // Air
+		p.Level.SetBlock(int32(pk.X), byte(pk.Y), int32(pk.Z), 0) // Air
 	default:
 		util.Debug("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented: " + fmt.Sprint(pk))
 	}

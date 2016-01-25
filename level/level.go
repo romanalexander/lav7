@@ -16,7 +16,7 @@ type Level interface {
 	GetChunk(int32, int32, bool) Chunk
 	SetChunk(int32, int32, Chunk)
 	GetBlock(int32, int32, int32) byte
-	SetBlock(int32, int32, int32, byte)
+	SetBlock(int32, byte, int32, byte)
 	GetBlockMeta(int32, int32, int32) byte
 	SetBlockMeta(int32, int32, int32, byte)
 	GetGenerator() gen.Generator

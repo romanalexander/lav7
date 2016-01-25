@@ -175,7 +175,7 @@ type PlayStatus struct {
 func (i *PlayStatus) Pid() byte { return PlayStatusHead }
 
 func (i *PlayStatus) Read(buf *buffer.Buffer) {
-	i.Status = buf.ReadStatus()
+	i.Status = buf.ReadInt()
 }
 
 func (i *PlayStatus) Write() *buffer.Buffer {
@@ -191,7 +191,7 @@ type Disconnect struct {
 func (i *Disconnect) Pid() byte { return DisconnectHead }
 
 func (i *Disconnect) Read(buf *buffer.Buffer) {
-	i.Message = buf.ReadMessage()
+	i.Message = buf.ReadString()
 }
 
 func (i *Disconnect) Write() *buffer.Buffer {
@@ -357,7 +357,7 @@ func (i *AddPlayer) Read(buf *buffer.Buffer) {
 		&i.X, &i.Y, &i.Z,
 		&i.SpeedX, &i.SpeedY, &i.SpeedZ,
 		&i.Yaw, &i.HeadYaw, &i.Pitch)
-	i.MetaData = i.Read(0)
+	i.Metadata = buf.Read(0)
 }
 
 func (i AddPlayer) Write() *buffer.Buffer {
@@ -365,7 +365,7 @@ func (i AddPlayer) Write() *buffer.Buffer {
 	buf.BatchWrite(i.RawUUID[:], i.Username, i.EntityID,
 		i.X, i.Y, i.Z,
 		i.SpeedX, i.SpeedY, i.SpeedZ,
-		i.Yaw, i.HeadYaw, i.Pitch, i.MetaData)
+		i.Yaw, i.HeadYaw, i.Pitch, i.Metadata)
 	buf.WriteByte(0x7f) // Temporal, TODO: implement metadata functions
 	return buf
 }
@@ -406,18 +406,18 @@ func (i *AddEntity) Read(buf *buffer.Buffer) {
 	buf.BatchRead(&i.EntityID, &i.Type,
 		&i.X, &i.Y, &i.Z,
 		&i.SpeedX, &i.SpeedY, &i.SpeedZ,
-		&i.Yaw, &Pitch)
-	i.MetaData = i.Read(0)
+		&i.Yaw, &i.Pitch)
+	i.Metadata = buf.Read(0)
 	// TODO
 }
 
 func (i AddEntity) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.RawUUID[:], i.Username, i.EntityID,
+	buf.BatchWrite(i.EntityID, i.Type,
 		i.X, i.Y, i.Z,
 		i.SpeedX, i.SpeedY, i.SpeedZ,
-		i.Yaw, i.HeadRot)
-	buf.Write(0x7f)
+		i.Yaw, i.Pitch)
+	buf.WriteByte(0x7f)
 	buf.BatchWrite(i.Link1, i.Link2, i.Link3)
 	return buf
 }
@@ -501,13 +501,13 @@ type MoveEntity struct {
 func (i MoveEntity) Pid() byte { return MoveEntityHead }
 
 func (i *MoveEntity) Read(buf *buffer.Buffer) {
-	entityCnt = buf.ReadInt()
+	entityCnt := buf.ReadInt()
 	i.EntityIDs = make([]uint64, entityCnt)
 	i.EntityPos = make([][6]float32, entityCnt)
 	for j := uint32(0); j < entityCnt; j++ {
 		i.EntityIDs[j] = buf.ReadLong()
 		for k := 0; k < 6; k++ {
-			i.EntityPos[i] = buf.ReadFloat()
+			i.EntityPos[j][k] = buf.ReadFloat()
 		}
 	}
 }
@@ -517,13 +517,14 @@ func (i MoveEntity) Write() *buffer.Buffer {
 		panic("Entity data slice length mismatch")
 	}
 	buf := new(buffer.Buffer)
-	buf.WriteInt(len(i.EntityIDs))
+	buf.WriteInt(uint32(len(i.EntityIDs)))
 	for k, e := range i.EntityIDs {
 		buf.WriteLong(e)
 		for j := 0; j < 6; j++ {
 			buf.WriteFloat(i.EntityPos[k][j])
 		}
 	}
+	return buf
 }
 
 const (
@@ -582,7 +583,7 @@ func (i RemoveBlock) Pid() byte { return RemoveBlockHead }
 
 func (i *RemoveBlock) Read(buf *buffer.Buffer) {
 	i.EntityID = buf.ReadLong()
-	i.X = buf.Readint()
+	i.X = buf.ReadInt()
 	i.Z = buf.ReadInt()
 	i.Y = buf.ReadByte()
 }
@@ -621,21 +622,21 @@ func (i UpdateBlock) Pid() byte { return UpdateBlockHead }
 func (i *UpdateBlock) Read(buf *buffer.Buffer) {
 	records := buf.ReadInt()
 	i.BlockRecords = make([]BlockRecord, records)
-	for k := 0; k < records; k++ {
+	for k := uint32(0); k < records; k++ {
 		x := buf.ReadInt()
 		z := buf.ReadInt()
 		y := buf.ReadByte()
 		id := buf.ReadByte()
 		flagMeta := buf.ReadByte()
-		i[k] = BlockRecord{X: x, Y: y, Z: z, ID: id, Meta: flagMeta & 0x0f, Flags: (flagMeta >> 4) & 0x0f}
+		i.BlockRecords[k] = BlockRecord{X: x, Y: y, Z: z, ID: id, Meta: flagMeta & 0x0f, Flags: (flagMeta >> 4) & 0x0f}
 	}
 }
 
 func (i UpdateBlock) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteInt(len(i.BlockRecords))
+	buf.WriteInt(uint32(len(i.BlockRecords)))
 	for _, record := range i.BlockRecords {
-		i.BatchWrite(record.X, record.Z, record.Y, record.ID, (record.Flags<<4 | record.Meta))
+		buf.BatchWrite(record.X, record.Z, record.Y, record.ID, (record.Flags<<4 | record.Meta))
 	}
 	return buf
 }
@@ -671,7 +672,31 @@ func (i AddPainting) Write() *buffer.Buffer {
 	return buf
 }
 
-// TODO: Explode
+type Explode struct {
+	X, Y, Z, Radius float32
+	Records         [][3]byte // X, Y, Z byte
+}
+
+func (i Explode) Pid() byte { return ExplodeHead }
+
+func (i *Explode) Read(buf *buffer.Buffer) {
+	buf.BatchRead(&i.X, &i.Y, &i.Z, &i.Radius)
+	cnt := buf.ReadInt()
+	i.Records = make([][3]byte, cnt)
+	for k := uint32(0); k < cnt; k++ {
+		buf.BatchRead(&i.Records[k][0], &i.Records[k][1], &i.Records[k][2])
+	}
+}
+
+func (i Explode) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.X, i.Y, i.Z, i.Radius)
+	buf.WriteInt(uint32(len(i.Records)))
+	for _, r := range i.Records {
+		buf.BatchWrite(r[0], r[1], r[2])
+	}
+	return buf
+}
 
 const (
 	EventSoundClick            = 1000
@@ -705,17 +730,17 @@ const (
 )
 
 type LevelEvent struct {
-	Evid uint16
-	X    float32
-	Y    float32
-	Z    float32
-	Data uint32
+	EventID uint16
+	X       float32
+	Y       float32
+	Z       float32
+	Data    uint32
 }
 
 func (i LevelEvent) Pid() byte { return LevelEventHead }
 
 func (i *LevelEvent) Read(buf *buffer.Buffer) {
-	i.Evid = buf.ReadShort()
+	i.EventID = buf.ReadShort()
 	i.X = buf.ReadFloat()
 	i.Y = buf.ReadFloat()
 	i.Z = buf.ReadFloat()
@@ -724,7 +749,7 @@ func (i *LevelEvent) Read(buf *buffer.Buffer) {
 
 func (i LevelEvent) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteShort(i.Evid)
+	buf.WriteShort(i.EventID)
 	buf.WriteFloat(i.X)
 	buf.WriteFloat(i.Y)
 	buf.WriteFloat(i.Z)
@@ -733,11 +758,11 @@ func (i LevelEvent) Write() *buffer.Buffer {
 }
 
 type BlockEvent struct {
-	X    uint32
-	Y    uint32
-	Z    uint32
-	Case uint32
-	Case uint32
+	X     uint32
+	Y     uint32
+	Z     uint32
+	Case1 uint32
+	Case2 uint32
 }
 
 func (i BlockEvent) Pid() byte { return BlockEventHead }
@@ -746,8 +771,8 @@ func (i *BlockEvent) Read(buf *buffer.Buffer) {
 	i.X = buf.ReadInt()
 	i.Y = buf.ReadInt()
 	i.Z = buf.ReadInt()
-	i.Case = buf.ReadInt()
-	i.Case = buf.ReadInt()
+	i.Case1 = buf.ReadInt()
+	i.Case2 = buf.ReadInt()
 }
 
 func (i BlockEvent) Write() *buffer.Buffer {
@@ -755,26 +780,28 @@ func (i BlockEvent) Write() *buffer.Buffer {
 	buf.WriteInt(i.X)
 	buf.WriteInt(i.Y)
 	buf.WriteInt(i.Z)
-	buf.WriteInt(i.Case)
-	buf.WriteInt(i.Case)
+	buf.WriteInt(i.Case1)
+	buf.WriteInt(i.Case2)
 	return buf
 }
 
 const (
-	EventHurtAnimation     byte = 2
-	EventDeathAnimation    byte = 3
-	EventTameFail          byte = 6
-	EventTameSuccess       byte = 7
-	EventShakeWet          byte = 8
-	EventUseItem           byte = 9
-	EventEatGrassAnimation byte = 10
-	EventFishHookBubble    byte = 11
-	EventFishHookPosition  byte = 12
-	EventFishHookHook      byte = 13
-	EventFishHookTease     byte = 14
-	EventSquidInkCloud     byte = 15
-	EventAmbientSound      byte = 16
-	EventRespawn           byte = 17
+	EventHurtAnimation byte = iota + 2
+	EventDeathAnimation
+	_
+	_
+	EventTameFail
+	EventTameSuccess
+	EventShakeWet
+	EventUseItem
+	EventEatGrassAnimation
+	EventFishHookBubble
+	EventFishHookPosition
+	EventFishHookHook
+	EventFishHookTease
+	EventSquidInkCloud
+	EventAmbientSound
+	EventRespawn
 )
 
 type EntityEvent struct {
@@ -797,9 +824,9 @@ func (i EntityEvent) Write() *buffer.Buffer {
 }
 
 const (
-	EventAdd    byte = 1
-	EventModify byte = 2
-	EventRemove byte = 3
+	EffectAdd byte = iota + 1
+	EffectModify
+	EffectRemove
 )
 
 type MobEffect struct {
@@ -807,7 +834,7 @@ type MobEffect struct {
 	EventId   byte
 	EffectId  byte
 	Amplifier byte
-	Particles byte
+	Particles bool
 	Duration  uint32
 }
 
@@ -818,7 +845,7 @@ func (i *MobEffect) Read(buf *buffer.Buffer) {
 	i.EventId = buf.ReadByte()
 	i.EffectId = buf.ReadByte()
 	i.Amplifier = buf.ReadByte()
-	i.Particles = buf.ReadByte()
+	i.Particles = buf.ReadBool()
 	i.Duration = buf.ReadInt()
 }
 
@@ -828,45 +855,24 @@ func (i MobEffect) Write() *buffer.Buffer {
 	buf.WriteByte(i.EventId)
 	buf.WriteByte(i.EffectId)
 	buf.WriteByte(i.Amplifier)
-	buf.WriteByte(i.Particles)
+	buf.WriteBool(i.Particles)
 	buf.WriteInt(i.Duration)
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::UPDATE_ATTRIBUTES_PACKET;
-//
-//
-// 	public $entityId;
-// 	/** @var Attribute[] */
-// 	public $entries = [];
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-//
-// 		$this->putLong($this->entityId);
-//
-// 		$this->putShort(count($this->entries));
-//
-// 		foreach($this->entries as $entry){
-// 			$this->putFloat($entry->getMinValue());
-// 			$this->putFloat($entry->getMaxValue());
-// 			$this->putFloat($entry->getValue());
-// 			$this->putString($entry->getName());
-// 		}
-// 	}
-//
-//
+type UpdateAttributes struct {
+	// TODO: implement this after NBT is done
+}
+
+func (i UpdateAttributes) Pid() byte { return UpdateAttributesHead }
+
+func (i *UpdateAttributes) Read(buf *buffer.Buffer) {}
+
+func (i UpdateAttributes) Write() *buffer.Buffer { return nil }
 
 type MobEquipment struct {
 	EntityID     uint64
+	Item         uint16 // TODO: implement this after item abstraction
 	Slot         byte
 	SelectedSlot byte
 }
@@ -875,7 +881,7 @@ func (i MobEquipment) Pid() byte { return MobEquipmentHead }
 
 func (i *MobEquipment) Read(buf *buffer.Buffer) {
 	i.EntityID = buf.ReadLong()
-	// Unexpected code:Slot Item
+	i.Item = buf.ReadShort()
 	i.Slot = buf.ReadByte()
 	i.SelectedSlot = buf.ReadByte()
 }
@@ -883,13 +889,13 @@ func (i *MobEquipment) Read(buf *buffer.Buffer) {
 func (i MobEquipment) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteLong(i.EntityID)
-	// Unexpected code:Slot Item
+	buf.WriteShort(0)
 	buf.WriteByte(i.Slot)
 	buf.WriteByte(i.SelectedSlot)
 	return buf
 }
 
-type MobArmorEquipment struct {
+type MobArmorEquipment struct { // TODO: implement this after slots
 	EntityID uint64
 }
 
@@ -897,19 +903,11 @@ func (i MobArmorEquipment) Pid() byte { return MobArmorEquipmentHead }
 
 func (i *MobArmorEquipment) Read(buf *buffer.Buffer) {
 	i.EntityID = buf.ReadLong()
-	// Unexpected code:Slot Slots
-	// Unexpected code:Slot Slots
-	// Unexpected code:Slot Slots
-	// Unexpected code:Slot Slots
 }
 
 func (i MobArmorEquipment) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteLong(i.EntityID)
-	// Unexpected code:Slot Slots
-	// Unexpected code:Slot Slots
-	// Unexpected code:Slot Slots
-	// Unexpected code:Slot Slots
 	return buf
 }
 
@@ -932,30 +930,45 @@ func (i Interact) Write() *buffer.Buffer {
 	return buf
 }
 
-type UseItem struct{}
+type UseItem struct {
+	X, Y, Z             uint32
+	Face                byte
+	FaceX, FaceY, FaceZ float32
+	PosX, PosY, PosZ    float32
+	Item                uint16 // TODO
+}
 
 func (i UseItem) Pid() byte { return UseItemHead }
 
-func (i *UseItem) Read(buf *buffer.Buffer) {}
+func (i *UseItem) Read(buf *buffer.Buffer) {
+	buf.BatchRead(&i.X, &i.Y, &i.Z,
+		&i.Face, &i.FaceX, &i.FaceY, &i.FaceZ,
+		&i.PosX, &i.PosY, &i.PosZ)
+}
 
 func (i UseItem) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.X, i.Y, i.Z,
+		i.Face, i.FaceX, i.FaceY, i.FaceZ,
+		i.PosX, i.PosY, i.PosZ)
 	return buf
 }
 
 const (
-	ActionStartBreak      byte = 0
-	ActionAbortBreak      byte = 1
-	ActionStopBreak       byte = 2
-	ActionReleaseItem     byte = 5
-	ActionStopSleeping    byte = 6
-	ActionRespawn         byte = 7
-	ActionJump            byte = 8
-	ActionStartSprint     byte = 9
-	ActionStopSprint      byte = 10
-	ActionStartSneak      byte = 11
-	ActionStopSneak       byte = 12
-	ActionDimensionChange byte = 13
+	ActionStartBreak uint32 = iota
+	ActionAbortBreak
+	ActionStopBreak
+	_
+	_
+	ActionReleaseItem
+	ActionStopSleeping
+	ActionRespawn
+	ActionJump
+	ActionStartSprint
+	ActionStopSprint
+	ActionStartSneak
+	ActionStopSneak
+	ActionDimensionChange
 )
 
 type PlayerAction struct {
@@ -1005,60 +1018,49 @@ func (i HurtArmor) Write() *buffer.Buffer {
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: 'int' object is not subscriptable
-//
-// 	const NETWORK_ID = Info::SET_ENTITY_DATA_PACKET;
-//
-// 	public $EntityID;
-// 	public $metadata;
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putLong($this->EntityID);
-// 		$meta = Binary::writeMetadata($this->metadata);
-// 		$this->put($meta);
-// 	}
-//
-//
+type SetEntityData struct{} // TODO
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::SET_ENTITY_MOTION_PACKET;
-//
-//
-// 	// EntityID, motX, motY, motZ
-// 	/** @var array[] */
-// 	public $entities = [];
-//
-// 	public function clean(){
-// 		$this->entities = [];
-// 		return parent::clean();
-// 	}
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putInt(count($this->entities));
-// 		foreach($this->entities as $d){
-// 			$this->putLong($d[0]); //EntityID
-// 			$this->putFloat($d[1]); //motX
-// 			$this->putFloat($d[2]); //motY
-// 			$this->putFloat($d[3]); //motZ
-// 		}
-// 	}
-//
-//
+func (i SetEntityData) Pid() byte { return SetEntityDataHead }
+
+func (i *SetEntityData) Read(buf *buffer.Buffer) {}
+
+func (i SetEntityData) Write() *buffer.Buffer {
+	return nil
+}
+
+type SetEntityMotion struct {
+	EntityIDs    []uint64
+	EntityMotion [][6]float32 // X, Y, Z, Yaw, HeadYaw, Pitch
+}
+
+func (i SetEntityMotion) Pid() byte { return SetEntityMotionHead }
+
+func (i *SetEntityMotion) Read(buf *buffer.Buffer) {
+	entityCnt := buf.ReadInt()
+	i.EntityIDs = make([]uint64, entityCnt)
+	i.EntityMotion = make([][6]float32, entityCnt)
+	for j := uint32(0); j < entityCnt; j++ {
+		i.EntityIDs[j] = buf.ReadLong()
+		for k := 0; k < 6; k++ {
+			i.EntityMotion[j][k] = buf.ReadFloat()
+		}
+	}
+}
+
+func (i SetEntityMotion) Write() *buffer.Buffer {
+	if len(i.EntityIDs) != len(i.EntityMotion) {
+		panic("Entity data slice length mismatch")
+	}
+	buf := new(buffer.Buffer)
+	buf.WriteInt(uint32(len(i.EntityIDs)))
+	for k, e := range i.EntityIDs {
+		buf.WriteLong(e)
+		for j := 0; j < 6; j++ {
+			buf.WriteFloat(i.EntityMotion[k][j])
+		}
+	}
+	return buf
+}
 
 type SetEntityLink struct {
 	From uint64
@@ -1161,7 +1163,7 @@ func (i Respawn) Write() *buffer.Buffer {
 	return buf
 }
 
-type DropItem struct{}
+type DropItem struct{} // TODO
 
 func (i DropItem) Pid() byte { return DropItemHead }
 
@@ -1173,7 +1175,7 @@ func (i DropItem) Write() *buffer.Buffer {
 }
 
 type ContainerOpen struct {
-	Windowid byte
+	WindowID byte
 	Type     byte
 	Slots    uint16
 	X        uint32
@@ -1184,7 +1186,7 @@ type ContainerOpen struct {
 func (i ContainerOpen) Pid() byte { return ContainerOpenHead }
 
 func (i *ContainerOpen) Read(buf *buffer.Buffer) {
-	i.Windowid = buf.ReadByte()
+	i.WindowID = buf.ReadByte()
 	i.Type = buf.ReadByte()
 	i.Slots = buf.ReadShort()
 	i.X = buf.ReadInt()
@@ -1194,7 +1196,7 @@ func (i *ContainerOpen) Read(buf *buffer.Buffer) {
 
 func (i ContainerOpen) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteByte(i.Windowid)
+	buf.WriteByte(i.WindowID)
 	buf.WriteByte(i.Type)
 	buf.WriteShort(i.Slots)
 	buf.WriteInt(i.X)
@@ -1204,22 +1206,22 @@ func (i ContainerOpen) Write() *buffer.Buffer {
 }
 
 type ContainerClose struct {
-	Windowid byte
+	WindowID byte
 }
 
 func (i ContainerClose) Pid() byte { return ContainerCloseHead }
 
 func (i *ContainerClose) Read(buf *buffer.Buffer) {
-	i.Windowid = buf.ReadByte()
+	i.WindowID = buf.ReadByte()
 }
 
 func (i ContainerClose) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteByte(i.Windowid)
+	buf.WriteByte(i.WindowID)
 	return buf
 }
 
-type ContainerSetSlot struct {
+type ContainerSetSlot struct { // TODO: implement this after slots
 	Windowid   byte
 	Slot       uint16
 	HotbarSlot uint16
@@ -1244,7 +1246,7 @@ func (i ContainerSetSlot) Write() *buffer.Buffer {
 }
 
 type ContainerSetData struct {
-	Windowid byte
+	WindowID byte
 	Property uint16
 	Value    uint16
 }
@@ -1252,223 +1254,42 @@ type ContainerSetData struct {
 func (i ContainerSetData) Pid() byte { return ContainerSetDataHead }
 
 func (i *ContainerSetData) Read(buf *buffer.Buffer) {
-	i.Windowid = buf.ReadByte()
+	i.WindowID = buf.ReadByte()
 	i.Property = buf.ReadShort()
 	i.Value = buf.ReadShort()
 }
 
 func (i ContainerSetData) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteByte(i.Windowid)
+	buf.WriteByte(i.WindowID)
 	buf.WriteShort(i.Property)
 	buf.WriteShort(i.Value)
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::CONTAINER_SET_CONTENT_PACKET;
-//
-// 	const SPECIAL_INVENTORY = 0;
-// 	const SPECIAL_ARMOR = 0x78;
-// 	const SPECIAL_CREATIVE = 0x79;
-//
-// 	public $windowid;
-// 	public $slots = [];
-// 	public $hotbar = [];
-//
-// 	public function clean(){
-// 		$this->slots = [];
-// 		$this->hotbar = [];
-// 		return parent::clean();
-// 	}
-//
-// 	public function decode(){
-// 		$this->windowid = $this->getByte();
-// 		$count = $this->getShort();
-// 		for($s = 0; $s < $count and !$this->feof(); ++$s){
-// 			$this->slots[$s] = $this->getSlot();
-// 		}
-// 		if($this->windowid === self::SPECIAL_INVENTORY){
-// 			$count = $this->getShort();
-// 			for($s = 0; $s < $count and !$this->feof(); ++$s){
-// 				$this->hotbar[$s] = $this->getInt();
-// 			}
-// 		}
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putByte($this->windowid);
-// 		$this->putShort(count($this->slots));
-// 		foreach($this->slots as $slot){
-// 			$this->putSlot($slot);
-// 		}
-// 		if($this->windowid === self::SPECIAL_INVENTORY and count($this->hotbar) > 0){
-// 			$this->putShort(count($this->hotbar));
-// 			foreach($this->hotbar as $slot){
-// 				$this->putInt($slot);
-// 			}
-// 		}else{
-// 			$this->putShort(0);
-// 		}
-// 	}
-//
+type ContainerSetContent struct{} // TODO
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::CRAFTING_DATA_PACKET;
-//
-// 	const ENTRY_SHAPELESS = 0;
-// 	const ENTRY_SHAPED = 1;
-// 	const ENTRY_FURNACE = 2;
-// 	const ENTRY_FURNACE_DATA = 3;
-// 	const ENTRY_ENCHANT_LIST = 4;
-//
-// 	/** @var object[] */
-// 	public $entries = [];
-// 	public $cleanRecipes = false;
-//
-// 	private static function writeEntry($entry, BinaryStream $stream){
-// 		if($entry instanceof ShapelessRecipe){
-// 			return self::writeShapelessRecipe($entry, $stream);
-// 		}elseif($entry instanceof ShapedRecipe){
-// 			return self::writeShapedRecipe($entry, $stream);
-// 		}elseif($entry instanceof FurnaceRecipe){
-// 			return self::writeFurnaceRecipe($entry, $stream);
-// 		}elseif($entry instanceof EnchantmentList){
-// 			return self::writeEnchantList($entry, $stream);
-// 		}
-//
-// 		return -1;
-// 	}
-//
-// 	private static function writeShapelessRecipe(ShapelessRecipe $recipe, BinaryStream $stream){
-// 		$stream->putInt($recipe->getIngredientCount());
-// 		foreach($recipe->getIngredientList() as $item){
-// 			$stream->putSlot($item);
-// 		}
-//
-// 		$stream->putInt(1);
-// 		$stream->putSlot($recipe->getResult());
-//
-// 		$stream->putUUID($recipe->getId());
-//
-// 		return CraftingDataPacket::ENTRY_SHAPELESS;
-// 	}
-//
-// 	private static function writeShapedRecipe(ShapedRecipe $recipe, BinaryStream $stream){
-// 		$stream->putInt($recipe->getWidth());
-// 		$stream->putInt($recipe->getHeight());
-//
-// 		for($z = 0; $z < $recipe->getHeight(); ++$z){
-// 			for($x = 0; $x < $recipe->getWidth(); ++$x){
-// 				$stream->putSlot($recipe->getIngredient($x, $z));
-// 			}
-// 		}
-//
-// 		$stream->putInt(1);
-// 		$stream->putSlot($recipe->getResult());
-//
-// 		$stream->putUUID($recipe->getId());
-//
-// 		return CraftingDataPacket::ENTRY_SHAPED;
-// 	}
-//
-// 	private static function writeFurnaceRecipe(FurnaceRecipe $recipe, BinaryStream $stream){
-// 		if($recipe->getInput()->getDamage() !== 0){ //Data recipe
-// 			$stream->putInt(($recipe->getInput()->getId() << 16) | ($recipe->getInput()->getDamage()));
-// 			$stream->putSlot($recipe->getResult());
-//
-// 			return CraftingDataPacket::ENTRY_FURNACE_DATA;
-// 		}else{
-// 			$stream->putInt($recipe->getInput()->getId());
-// 			$stream->putSlot($recipe->getResult());
-//
-// 			return CraftingDataPacket::ENTRY_FURNACE;
-// 		}
-// 	}
-//
-// 	private static function writeEnchantList(EnchantmentList $list, BinaryStream $stream){
-//
-// 		$stream->putByte($list->getSize());
-// 		for($i = 0; $i < $list->getSize(); ++$i){
-// 			$entry = $list->getSlot($i);
-// 			$stream->putInt($entry->getCost());
-// 			$stream->putByte(count($entry->getEnchantments()));
-// 			foreach($entry->getEnchantments() as $enchantment){
-// 				$stream->putInt($enchantment->getId());
-// 				$stream->putInt($enchantment->getLevel());
-// 			}
-// 			$stream->putString($entry->getRandomName());
-// 		}
-//
-// 		return CraftingDataPacket::ENTRY_ENCHANT_LIST;
-// 	}
-//
-// 	public function addShapelessRecipe(ShapelessRecipe $recipe){
-// 		$this->entries[] = $recipe;
-// 	}
-//
-// 	public function addShapedRecipe(ShapedRecipe $recipe){
-// 		$this->entries[] = $recipe;
-// 	}
-//
-// 	public function addFurnaceRecipe(FurnaceRecipe $recipe){
-// 		$this->entries[] = $recipe;
-// 	}
-//
-// 	public function addEnchantList(EnchantmentList $list){
-// 		$this->entries[] = $list;
-// 	}
-//
-// 	public function clean(){
-// 		$this->entries = [];
-// 		return parent::clean();
-// 	}
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putInt(count($this->entries));
-//
-// 		$writer = new BinaryStream();
-// 		foreach($this->entries as $d){
-// 			$entryType = self::writeEntry($d, $writer);
-// 			if($entryType >= 0){
-// 				$this->putInt($entryType);
-// 				$this->putInt(strlen($writer->getBuffer()));
-// 				$this->put($writer->getBuffer());
-// 			}else{
-// 				$this->putInt(-1);
-// 				$this->putInt(0);
-// 			}
-//
-// 			$writer->reset();
-// 		}
-//
-// 		$this->putByte($this->cleanRecipes ? 1 : 0);
-// 	}
-//
-//
+func (i ContainerSetContent) Pid() byte { return ContainerSetContentHead }
 
-type CraftingEvent struct{}
+func (i *ContainerSetContent) Read(buf *buffer.Buffer) {}
+
+func (i ContainerSetContent) Write() *buffer.Buffer { return nil }
+
+type CraftingData struct{} // TODO
+
+func (i CraftingData) Pid() byte { return CraftingDataHead }
+
+func (i *CraftingData) Read(buf *buffer.Buffer) {}
+
+func (i CraftingData) Write() *buffer.Buffer { return nil }
+
+type CraftingEvent struct{} // TODO
 
 func (i CraftingEvent) Pid() byte { return CraftingEventHead }
 
 func (i *CraftingEvent) Read(buf *buffer.Buffer) {}
 
-func (i CraftingEvent) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	return buf
-}
+func (i CraftingEvent) Write() *buffer.Buffer { return nil }
 
 type AdventureSettings struct {
 	Flags uint32
@@ -1487,9 +1308,10 @@ func (i AdventureSettings) Write() *buffer.Buffer {
 }
 
 type BlockEntityData struct {
-	X uint32
-	Y uint32
-	Z uint32
+	X        uint32
+	Y        uint32
+	Z        uint32
+	NamedTag []byte
 }
 
 func (i BlockEntityData) Pid() byte { return BlockEntityDataHead }
@@ -1498,7 +1320,7 @@ func (i *BlockEntityData) Read(buf *buffer.Buffer) {
 	i.X = buf.ReadInt()
 	i.Y = buf.ReadInt()
 	i.Z = buf.ReadInt()
-	// Unexpected code: Namedtag
+	i.NamedTag = buf.Read(0)
 }
 
 func (i BlockEntityData) Write() *buffer.Buffer {
@@ -1506,7 +1328,7 @@ func (i BlockEntityData) Write() *buffer.Buffer {
 	buf.WriteInt(i.X)
 	buf.WriteInt(i.Y)
 	buf.WriteInt(i.Z)
-	// Unexpected code: Namedtag
+	buf.Write(i.NamedTag)
 	return buf
 }
 
@@ -1567,44 +1389,57 @@ func (i SetPlayerGametype) Write() *buffer.Buffer {
 	return buf
 }
 
-// An exception was thrown while parsing/converting PocketMine-MP protocol.
-// Please read original PHP code and port it manually.
-// Exception: string index out of range
-//
-// 	const NETWORK_ID = Info::PLAYER_LIST_PACKET;
-//
-// 	const TYPE_ADD = 0;
-// 	const TYPE_REMOVE = 1;
-//
-// 	//REMOVE: UUID, ADD: UUID, entity id, name, isSlim, skin
-// 	/** @var array[] */
-// 	public $entries = [];
-// 	public $type;
-//
-// 	public function clean(){
-// 		$this->entries = [];
-// 		return parent::clean();
-// 	}
-//
-// 	public function decode(){
-//
-// 	}
-//
-// 	public function encode(){
-// 		$this->reset();
-// 		$this->putByte($this->type);
-// 		$this->putInt(count($this->entries));
-// 		foreach($this->entries as $d){
-// 			if($this->type === self::TYPE_ADD){
-// 				$this->putUUID($d[0]);
-// 				$this->putLong($d[1]);
-// 				$this->putString($d[2]);
-// 				$this->putString($d[3]);
-// 				$this->putString($d[4]);
-// 			}else{
-// 				$this->putUUID($d[0]);
-// 			}
-// 		}
-// 	}
-//
-//
+type PlayerListEntry struct {
+	RawUUID            [16]byte
+	EntityID           uint64
+	Username, Slimness string
+	Skin               []byte
+}
+
+const (
+	PlayerListRemove byte = 0
+	PlayerListAdd    byte = 1
+)
+
+type PlayerList struct {
+	Type          byte
+	PlayerEntries []PlayerListEntry
+}
+
+func (i PlayerList) Pid() byte { return PlayerListHead }
+
+func (i *PlayerList) Read(buf *buffer.Buffer) {
+	i.Type = buf.ReadByte()
+	entryCnt := buf.ReadInt()
+	i.PlayerEntries = make([]PlayerListEntry, entryCnt)
+	for k := uint32(0); k < entryCnt; k++ {
+		entry := PlayerListEntry{}
+		copy(entry.RawUUID[:], buf.Read(16))
+		if i.Type == PlayerListRemove {
+			i.PlayerEntries[k] = entry
+			continue
+		}
+		entry.EntityID = buf.ReadLong()
+		entry.Username = buf.ReadString()
+		entry.Slimness = buf.ReadString()
+		entry.Skin = []byte(buf.ReadString())
+		i.PlayerEntries[k] = entry
+	}
+}
+
+func (i PlayerList) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.WriteByte(i.Type)
+	buf.WriteInt(uint32(len(i.PlayerEntries)))
+	for _, entry := range i.PlayerEntries {
+		buf.Write(entry.RawUUID[:])
+		if i.Type == PlayerListRemove {
+			continue
+		}
+		buf.WriteLong(entry.EntityID)
+		buf.WriteString(entry.Username)
+		buf.WriteString(entry.Slimness)
+		buf.WriteString(string(entry.Skin))
+	}
+	return buf
+}
