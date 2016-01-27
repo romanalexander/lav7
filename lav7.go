@@ -7,9 +7,9 @@ import (
 
 const (
 	// MinecraftProtocol is a mojang network protocol version.
-	MinecraftProtocol = 38
+	MinecraftProtocol = 41
 	// MinecraftVersion is a human readable minecraft version.
-	MinecraftVersion = "0.13.1"
+	MinecraftVersion = "0.14.0"
 )
 
 // ServerName contains human readable server name

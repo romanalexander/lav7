@@ -29,7 +29,7 @@ func main() {
 	util.Debug("Elapsed time:", time.Since(start).Seconds(), "seconds")
 	var r *raknet.Router
 	var err error
-	if r, err = raknet.CreateRouter(lav7.AddPlayer, 19132); err != nil {
+	if r, err = raknet.CreateRouter(lav7.RegisterPlayer, 19132); err != nil {
 		fmt.Println(err)
 		return
 	}

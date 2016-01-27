@@ -131,7 +131,6 @@ func (l Level) Save() error {
 		if err := os.MkdirAll(filepath.Dir(path), 0644); err != nil {
 			util.Debug("Error while creating dir:", err)
 		}
-		util.Debug("Mkdir", filepath.Dir(path))
 		if err := ioutil.WriteFile(path, c.write().Done(), 0644); err != nil {
 			util.Debug("Error while saving:", err)
 			continue
