@@ -7,7 +7,7 @@ import (
 
 const (
 	// MinecraftProtocol is a mojang network protocol version.
-	MinecraftProtocol = 41
+	MinecraftProtocol = 42
 	// MinecraftVersion is a human readable minecraft version.
 	MinecraftVersion = "0.14.0"
 )

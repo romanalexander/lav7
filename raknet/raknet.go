@@ -11,7 +11,7 @@ const (
 	// RaknetVersion is a version of this library.
 	RaknetVersion = "1.0.0"
 	// MinecraftProtocol is a mojang network protocol version.
-	MinecraftProtocol = 41
+	MinecraftProtocol = 42
 	// MinecraftVersion is a human readable minecraft version.
 	MinecraftVersion = "0.14.0"
 )
