@@ -1,10 +1,10 @@
 package raknet
 
 import (
-	"math"
 	"net"
 	"time"
 
+	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
@@ -40,7 +40,12 @@ func NewEncapsulated(buf *buffer.Buffer) (ep *EncapsulatedPacket) {
 	flags := buf.ReadByte()
 	ep.Reliability = flags >> 5
 	ep.HasSplit = (flags>>4)&1 > 0
-	length := uint16(math.Ceil(float64(buf.ReadShort()) / 8))
+	l := uint32(buf.ReadShort())
+	length := l >> 3
+	if l%8 != 0 {
+		length++
+	}
+	util.Debug("Length", length)
 	if ep.Reliability > 0 {
 		if ep.Reliability >= 2 && ep.Reliability != 5 {
 			ep.MessageIndex = buf.ReadLTriad()
@@ -55,7 +60,7 @@ func NewEncapsulated(buf *buffer.Buffer) (ep *EncapsulatedPacket) {
 		ep.SplitID = buf.ReadShort()
 		ep.SplitIndex = buf.ReadInt()
 	}
-	b := buf.Read(uint32(length))
+	b := buf.Read(length)
 	ep.Buffer = buffer.FromBytes(b)
 	return
 }

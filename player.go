@@ -9,6 +9,7 @@ import (
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
+	"github.com/davecgh/go-spew/spew"
 )
 
 // Player is a struct for handling/containing MCPE client specific things.
@@ -36,6 +37,8 @@ func (p *Player) HandlePacket(b *buffer.Buffer) (err error) {
 	if pk = GetPacket(pid); pk == nil {
 		return
 	}
+	util.Debug("Player-dump")
+	spew.Dump(b)
 	pk.Read(b)
 	return p.handleDataPacket(pk)
 }
@@ -141,7 +144,8 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		util.Debug("Rm:", pk.X, pk.Y, pk.Z)
 		p.Level.SetBlock(int32(pk.X), byte(pk.Y), int32(pk.Z), 0) // Air
 	default:
-		util.Debug("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented: " + fmt.Sprint(pk))
+		util.Debug("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented:")
+		spew.Dump(pk)
 	}
 	return
 }
