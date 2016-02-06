@@ -11,9 +11,9 @@ const (
 	// RaknetVersion is a version of this library.
 	RaknetVersion = "1.0.0"
 	// MinecraftProtocol is a mojang network protocol version.
-	MinecraftProtocol = 42
+	MinecraftProtocol = 43
 	// MinecraftVersion is a human readable minecraft version.
-	MinecraftVersion = "0.14.0"
+	MinecraftVersion = "0.14.0.4"
 )
 
 // Players is a reference of lav7.players; it is a dirty trick to avoid import cycle.
