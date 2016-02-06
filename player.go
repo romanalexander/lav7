@@ -31,14 +31,11 @@ type Player struct {
 
 // HandlePacket handles received MCPE packet after raknet connection is established.
 func (p *Player) HandlePacket(b *buffer.Buffer) (err error) {
-	pid := b.Payload[0]
-	b.Offset = 1
+	pid := b.ReadByte()
 	var pk Packet
 	if pk = GetPacket(pid); pk == nil {
 		return
 	}
-	util.Debug("Player-dump")
-	spew.Dump(b)
 	pk.Read(b)
 	return p.handleDataPacket(pk)
 }

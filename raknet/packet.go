@@ -45,7 +45,6 @@ func NewEncapsulated(buf *buffer.Buffer) (ep *EncapsulatedPacket) {
 	if l%8 != 0 {
 		length++
 	}
-	util.Debug("Length", length)
 	if ep.Reliability > 0 {
 		if ep.Reliability >= 2 && ep.Reliability != 5 {
 			ep.MessageIndex = buf.ReadLTriad()
