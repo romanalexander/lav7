@@ -53,21 +53,20 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		}
 		p.Username = pk.Username
 
-		buf := buffer.FromBytes([]byte{0x90}) // PlayStatusPacket
+		ret := &PlayStatus{}
 		if pk.Proto1 > raknet.MinecraftProtocol {
-			buf.WriteInt(2) // Failed by server
-			p.send(buf)
+			ret.Status = LoginFailedServer
+			p.SendPacket(ret)
 			p.disconnect("Outdated server")
 			return
 		} else if pk.Proto1 < raknet.MinecraftProtocol {
-			buf := buffer.FromBytes([]byte{0x90}) // PlayStatusPacket
-			buf.WriteInt(1)                       // Failed by client
-			p.send(buf)
+			ret.Status = LoginFailedClient
+			p.SendPacket(ret)
 			p.disconnect("Outdated client")
 			return
 		}
-		buf.WriteInt(0) // Success
-		p.send(buf)
+		ret.Status = LoginSuccess
+		p.SendPacket(ret)
 
 		p.ClientID = pk.ClientID
 		p.ClientUUIDRaw = pk.RawUUID
@@ -112,7 +111,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 				p.SendChunk(s.x, s.z, s.c)
 			}
 			p.firstSpawn()
-			fmt.Println(p.Username + " joined the game")
+			log.Println(p.Username + " joined the game")
 			p.SendMessage("Hello, this is lav7 test server!")
 		}()
 	case *Batch:
@@ -168,9 +167,10 @@ func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
 }
 
 func (p *Player) firstSpawn() {
-	buf := buffer.FromBytes([]byte{0x90}) // PlayStatusPacket
-	buf.WriteInt(3)                       // Player spawn
-	p.send(buf)
+	pk := &PlayStatus{
+		Status: PlayerSpawn,
+	}
+	p.SendPacket(pk)
 }
 
 // Kick kicks player from server.

@@ -164,10 +164,10 @@ func (i Login) Write() *buffer.Buffer {
 }
 
 const (
-	LoginSuccess      byte = 0
-	LoginFailedClient byte = 1
-	LoginFailedServer byte = 2
-	PlayerSpawn       byte = 3
+	LoginSuccess uint32 = iota
+	LoginFailedClient
+	LoginFailedServer
+	PlayerSpawn
 )
 
 type PlayStatus struct {

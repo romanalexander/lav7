@@ -1,7 +1,6 @@
 package raknet
 
 import (
-	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -217,7 +216,6 @@ func (s *Session) joinSplits(ep *EncapsulatedPacket) {
 	if len(tab) == int(ep.SplitCount) {
 		sep := new(EncapsulatedPacket)
 		sep.Buffer = new(buffer.Buffer)
-		fmt.Println(ep.SplitCount)
 		for i := uint32(0); i < ep.SplitCount; i++ {
 			sep.Write(tab[i])
 		}

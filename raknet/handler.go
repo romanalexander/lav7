@@ -1,7 +1,6 @@
 package raknet
 
 import (
-	"fmt"
 	"log"
 	"net"
 
@@ -400,7 +399,7 @@ func (p *clientHandshake) Read(buf *buffer.Buffer) (f Fields) {
 }
 
 func (p *clientHandshake) Handle(f Fields, session *Session) {
-	fmt.Println("Client connected successfully!")
+	log.Println("Client connected successfully!")
 	session.Status = 3
 	session.connComplete()
 	return
