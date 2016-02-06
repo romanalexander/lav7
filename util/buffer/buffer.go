@@ -367,7 +367,7 @@ func (buf *Buffer) WriteAddress(i *net.UDPAddr) (err error) {
 	if err = buf.WriteByte(4); err != nil {
 		return
 	}
-	for _, v := range i.IP {
+	for _, v := range i.IP.To4() {
 		if err = buf.WriteByte(v ^ 0xff); err != nil {
 			return
 		}
