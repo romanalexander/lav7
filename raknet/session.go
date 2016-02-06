@@ -212,19 +212,16 @@ func (s *Session) joinSplits(ep *EncapsulatedPacket) {
 		tab = s.splitTable[ep.SplitID]
 	}
 	if _, ok := tab[ep.SplitIndex]; !ok {
-		util.Debug("SplitID:", ep.SplitID, "SplitIndex:", ep.SplitIndex, "SplitCount:", ep.SplitCount)
 		tab[ep.SplitIndex] = ep.Buffer.Done()
 	}
 	if len(tab) == int(ep.SplitCount) {
-		util.Debug("Joining")
-		ep := new(EncapsulatedPacket)
-		ep.Buffer = new(buffer.Buffer)
+		sep := new(EncapsulatedPacket)
+		sep.Buffer = new(buffer.Buffer)
+		fmt.Println(ep.SplitCount)
 		for i := uint32(0); i < ep.SplitCount; i++ {
-			ep.Write(tab[i])
-			fmt.Print(hex.Dump(tab[i]))
+			sep.Write(tab[i])
 		}
-		fmt.Print(hex.Dump(ep.Payload))
-		s.handleEncapsulated(ep)
+		s.handleEncapsulated(sep)
 	}
 }
 
