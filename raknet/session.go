@@ -1,8 +1,8 @@
 package raknet
 
 import (
-	"encoding/hex"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -25,7 +25,7 @@ func GetSession(address *net.UDPAddr, sendChannel chan Packet, playerAdder func(
 	if s, ok := Sessions[identifier]; ok {
 		return s
 	}
-	util.Debug("New session:", identifier)
+	log.Println("New session:", identifier)
 	Sessions[identifier] = new(Session)
 	Sessions[identifier].Init(address)
 	Sessions[identifier].SendChan = sendChannel
@@ -97,7 +97,7 @@ func (s *Session) work() {
 				break
 			}
 			s.needPing = (uint64(rand.Uint32())<<33 | uint64(rand.Uint32())<<1) + 1
-			util.Debug("No signal: sending ping, PingID", s.needPing)
+			log.Println("No signal: sending ping, PingID", s.needPing)
 			s.sendEncapsulatedDirect(&EncapsulatedPacket{Buffer: new(ping).Write(Fields{
 				"pingID": s.needPing,
 			})})
@@ -173,7 +173,7 @@ func (s *Session) handlePacket(pk Packet) {
 func (s *Session) preEncapsulated(ep *EncapsulatedPacket) {
 	if ep.Reliability >= 2 && ep.Reliability != 5 { // MessageIndex exists
 		if ep.MessageIndex < s.reliableBorder[0] || ep.MessageIndex >= s.reliableBorder[1] { // Outside of window
-			//util.Debug("MessageIndex drop:", ep.MessageIndex, "should be", s.reliableBorder[0], "<= n <", s.reliableBorder[1])
+			//log.Println("MessageIndex drop:", ep.MessageIndex, "should be", s.reliableBorder[0], "<= n <", s.reliableBorder[1])
 			return
 		}
 		if ep.MessageIndex-s.lastMsgIndex == 1 {
@@ -207,7 +207,7 @@ func (s *Session) joinSplits(ep *EncapsulatedPacket) {
 	}
 	tab, ok := s.splitTable[ep.SplitID]
 	if !ok {
-		util.Debug("New splitID:", ep.SplitID)
+		log.Println("New splitID:", ep.SplitID)
 		s.splitTable[ep.SplitID] = make(map[uint32][]byte)
 		tab = s.splitTable[ep.SplitID]
 	}
@@ -233,11 +233,11 @@ func (s *Session) handleEncapsulated(ep *EncapsulatedPacket) {
 		return
 	}
 	head := ep.ReadByte()
-	if s.Status > 2 && head >= 0x80 {
-		ep.Buffer.Offset = 0
+
+	if s.Status > 2 && head == 0x8e {
 		s.playerHandler(ep.Buffer)
-		return
 	}
+
 	if handler := GetDataHandler(head); handler != nil {
 		handler.Handle(handler.Read(ep.Buffer), s)
 	}
@@ -323,5 +323,5 @@ func (s *Session) Close(reason string) {
 	delete(Sessions, s.Address.String())
 	delete(Players, s.Address.String())
 	blockList[s.Address.String()] = time.Now().Add(time.Second + time.Millisecond*500)
-	util.Debug("Session closed:", reason)
+	log.Println("Session closed:", reason)
 }

@@ -2,9 +2,9 @@ package raknet
 
 import (
 	"fmt"
+	"log"
 	"net"
 
-	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
@@ -105,7 +105,7 @@ func (p *openConnectionRequest1) Handle(f Fields, session *Session) {
 	if session.Status > 1 {
 		return
 	}
-	util.Debug("Handling OCR1: protocol", f["protocol"], f)
+	log.Println("Handling OCR1: protocol", f["protocol"], f)
 	buf := new(openConnectionReply1).Write(Fields{
 		"mtuSize":  f["mtuSize"],
 		"serverID": serverID,
@@ -165,7 +165,7 @@ func (p *openConnectionRequest2) Handle(f Fields, session *Session) {
 	if session.Status != 1 {
 		return
 	}
-	util.Debug("Handling OCR2: clientID", f["clientID"])
+	log.Println("Handling OCR2: clientID", f["clientID"])
 	session.ID = f["clientID"].(uint64)
 	session.mtuSize = f["mtuSize"].(uint16)
 	buf := new(openConnectionReply2).Write(Fields{
@@ -222,8 +222,8 @@ func (p *dataPacket) Read(buf *buffer.Buffer) (f Fields) {
 	dp := new(DataPacket)
 	dp.Buffer = buf
 	/*s
-	util.Debug("======= DataPacket dump =======")
-	util.Debug(hex.Dump(dp.Buffer.Payload))
+	log.Println("======= DataPacket dump =======")
+	log.Println(hex.Dump(dp.Buffer.Payload))
 	*/
 	dp.Decode()
 	f["seqNumber"] = dp.SeqNumber
@@ -235,17 +235,17 @@ func (p *dataPacket) Handle(f Fields, session *Session) {
 	seqNumber := f["seqNumber"].(uint32)
 	packets := f["packets"].([]*EncapsulatedPacket)
 	/*
-		util.Debug("SeqNumber:", seqNumber, "should be", session.windowBorder[0], "<= n <", session.windowBorder[1])
-		util.Debug("Packets:", len(packets))
+		log.Println("SeqNumber:", seqNumber, "should be", session.windowBorder[0], "<= n <", session.windowBorder[1])
+		log.Println("Packets:", len(packets))
 		for i, pk := range packets {
-			util.Debug("Encapsulated #" + strconv.Itoa(i))
-			util.Debug(hex.Dump(func() []byte {
+			log.Println("Encapsulated #" + strconv.Itoa(i))
+			log.Println(hex.Dump(func() []byte {
 				b, _ := pk.Bytes()
 				return b.Payload
 			}()))
-			util.Debug(hex.Dump(pk.Payload) + "(real data)")
+			log.Println(hex.Dump(pk.Payload) + "(real data)")
 		}
-		util.Debug("===== DataPacket dump end =====")
+		log.Println("===== DataPacket dump end =====")
 	*/
 	if seqNumber < session.windowBorder[0] || seqNumber >= session.windowBorder[1] {
 		return
@@ -256,7 +256,7 @@ func (p *dataPacket) Handle(f Fields, session *Session) {
 	if diff != 1 {
 		for i := session.lastSeq + 1; i < seqNumber; i++ {
 			if _, ok := session.packetWindow[i]; !ok {
-				// util.Debug("Seqnumber", i, "is missing. Adding to NACK queue.")
+				// log.Println("Seqnumber", i, "is missing. Adding to NACK queue.")
 				session.nackQueue[i] = true
 			}
 		}

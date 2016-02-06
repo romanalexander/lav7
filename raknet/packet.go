@@ -4,7 +4,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 

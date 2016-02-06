@@ -28,7 +28,7 @@ func (i *Batch) Read(buf *buffer.Buffer) {
 	i.Payloads = make([][]byte, 0)
 	payload, err := util.DecodeDeflate(buf.Read(uint32(buf.ReadInt())))
 	if err != nil {
-		util.Debug("Error while decompressing Batch payload:", err)
+		log.Println("Error while decompressing Batch payload:", err)
 		return
 	}
 	b := buffer.FromBytes(payload)

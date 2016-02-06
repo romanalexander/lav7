@@ -2,6 +2,7 @@ package dummy
 
 import (
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/lav7/level/gen"
-	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
@@ -129,10 +129,10 @@ func (l Level) Save() error {
 		c := c.(*Chunk)
 		path, _ := filepath.Abs("levels/" + l.GetName() + "/" + k + ".raw")
 		if err := os.MkdirAll(filepath.Dir(path), 0644); err != nil {
-			util.Debug("Error while creating dir:", err)
+			log.Println("Error while creating dir:", err)
 		}
 		if err := ioutil.WriteFile(path, c.write().Done(), 0644); err != nil {
-			util.Debug("Error while saving:", err)
+			log.Println("Error while saving:", err)
 			continue
 		}
 	}

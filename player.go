@@ -3,6 +3,7 @@ package lav7
 import (
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net"
 
 	"github.com/L7-MCPE/lav7/level"
@@ -131,17 +132,17 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 				Stop("issued by player " + p.Username)
 			}
 		}
-		util.Debug(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
+		log.Println(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
 		AsPlayers(func(pp *Player) error { pp.SendMessage(fmt.Sprintf("<%s> %s", p.Username, pk.Message)); return nil })
 	case *MovePlayer:
 		//pk := pk.(*MovePlayer)
-		// util.Debug("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
+		// log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
 	case *RemoveBlock:
 		pk := pk.(*RemoveBlock)
-		util.Debug("Rm:", pk.X, pk.Y, pk.Z)
+		log.Println("Rm:", pk.X, pk.Y, pk.Z)
 		p.Level.SetBlock(int32(pk.X), byte(pk.Y), int32(pk.Z), 0) // Air
 	default:
-		util.Debug("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented:")
+		log.Println("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented:")
 		spew.Dump(pk)
 	}
 	return
@@ -186,7 +187,7 @@ func (p *Player) disconnect(msg string) {
 
 // SendPacket sends given packet to client.
 func (p *Player) SendPacket(pk Packet) {
-	buf := buffer.FromBytes([]byte{pk.Pid()})
+	buf := buffer.FromBytes([]byte{0x8e, pk.Pid()})
 	buf.Write(pk.Write().Done())
 	p.send(buf)
 }
@@ -202,6 +203,7 @@ func (p *Player) SendCompressed(pks ...Packet) {
 	p.SendPacket(batch)
 }
 
+// Do not use this method for sending packet to client, this is an internal function.
 func (p *Player) send(buf *buffer.Buffer) {
 	if session, ok := raknet.Sessions[p.Address.String()]; ok {
 		ep := new(raknet.EncapsulatedPacket)

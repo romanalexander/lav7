@@ -1,6 +1,8 @@
 package lav7
 
 import (
+	"log"
+
 	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util"
@@ -210,7 +212,7 @@ func (i *Batch) Read(buf *buffer.Buffer) {
 	i.Payloads = make([][]byte, 0)
 	payload, err := util.DecodeDeflate(buf.Read(uint32(buf.ReadInt())))
 	if err != nil {
-		util.Debug("Error while decompressing Batch payload:", err)
+		log.Println("Error while decompressing Batch payload:", err)
 		return
 	}
 	b := buffer.FromBytes(payload)
