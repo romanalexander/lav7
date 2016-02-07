@@ -1,9 +1,6 @@
 package lav7
 
-import (
-	"github.com/L7-MCPE/lav7/level"
-	"github.com/L7-MCPE/lav7/level/format/dummy"
-)
+import "github.com/L7-MCPE/lav7/level"
 
 const (
 	// MinecraftProtocol is a mojang network protocol version.
@@ -23,7 +20,7 @@ var MaxPlayers = 20
 
 var lastEntityID uint64
 
-var levels = map[string]level.Level{
-	defaultLvl: new(dummy.Level),
+var levels = map[string]*level.Level{
+	defaultLvl: new(level.Level),
 }
 var defaultLvl = "default"

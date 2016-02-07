@@ -21,6 +21,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) 
 	p.Address = addr
 	p.Level = GetDefaultLevel()
 	p.EntityID = atomic.AddUint64(&lastEntityID, 1)
+	p.sentChunks = make(map[[2]int32]bool)
 	Players[identifier] = p
 	return p.HandlePacket
 }
@@ -43,7 +44,7 @@ func BroadcastPacket(pk Packet) {
 }
 
 // GetLevel returns level reference with given name if exists, or nil.
-func GetLevel(name string) level.Level {
+func GetLevel(name string) *level.Level {
 	if l, ok := levels[name]; ok {
 		return l
 	}
@@ -51,7 +52,7 @@ func GetLevel(name string) level.Level {
 }
 
 // GetDefaultLevel returns default level reference.
-func GetDefaultLevel() level.Level {
+func GetDefaultLevel() *level.Level {
 	return levels[defaultLvl]
 }
 

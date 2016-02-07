@@ -9,13 +9,16 @@ import (
 
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/command"
+	"github.com/L7-MCPE/lav7/level"
+	"github.com/L7-MCPE/lav7/level/format/dummy"
+	"github.com/L7-MCPE/lav7/level/gen"
 	"github.com/L7-MCPE/lav7/raknet"
 )
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	raknet.Players = lav7.Players
-	lav7.GetDefaultLevel().Init()
+	lav7.GetDefaultLevel().Init(new(gen.SampleGenerator), func() level.Chunk { return dummy.NewChunk() })
 	log.Println("Generating chunks")
 	wg := new(sync.WaitGroup)
 	wg.Add(25)

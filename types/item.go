@@ -44,3 +44,18 @@ func (i Item) Write() []byte {
 	buf.Write(compound.Bytes())
 	return buf.Done()
 }
+
+func (i Item) Block() *Block {
+	if i.ID > 255 {
+		return &Block{} // Air
+	}
+	if i.Meta > 15 {
+		return &Block{
+			ID: byte(i.ID),
+		}
+	}
+	return &Block{
+		ID:   byte(i.ID),
+		Meta: byte(i.Meta),
+	}
+}

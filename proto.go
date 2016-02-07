@@ -945,18 +945,18 @@ func (i Interact) Write() *buffer.Buffer {
 }
 
 type UseItem struct {
-	X, Y, Z             uint32
-	Face                byte
-	FaceX, FaceY, FaceZ float32
-	PosX, PosY, PosZ    float32
-	Item                *types.Item
+	X, Y, Z                uint32
+	Face                   byte
+	FloatX, FloatY, FloatZ float32
+	PosX, PosY, PosZ       float32
+	Item                   *types.Item
 }
 
 func (i UseItem) Pid() byte { return UseItemHead }
 
 func (i *UseItem) Read(buf *buffer.Buffer) {
 	buf.BatchRead(&i.X, &i.Y, &i.Z,
-		&i.Face, &i.FaceX, &i.FaceY, &i.FaceZ,
+		&i.Face, &i.FloatX, &i.FloatY, &i.FloatZ,
 		&i.PosX, &i.PosY, &i.PosZ)
 	i.Item = new(types.Item)
 	i.Item.Read(buf)
@@ -965,7 +965,7 @@ func (i *UseItem) Read(buf *buffer.Buffer) {
 func (i UseItem) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.BatchWrite(i.X, i.Y, i.Z,
-		i.Face, i.FaceX, i.FaceY, i.FaceZ,
+		i.Face, i.FloatX, i.FloatY, i.FloatZ,
 		i.PosX, i.PosY, i.PosZ, i.Item.Write())
 	return buf
 }

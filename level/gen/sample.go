@@ -1,15 +1,18 @@
 package gen
 
+import "github.com/L7-MCPE/lav7/level"
+
 type SampleGenerator struct{}
 
-func (s SampleGenerator) Gen(x, z int32) (bs [16 * 16 * 128][2]byte) {
-	for x := 0; x < 16; x++ {
-		for z := 0; z < 16; z++ {
-			for y := 0; y < 60; y++ {
-				bs[y<<8|z<<4|x] = [2]byte{3, 0}
+func (s SampleGenerator) Gen(x, z int32, chunk level.Chunk) error {
+	for x := byte(0); x < 16; x++ {
+		for z := byte(0); z < 16; z++ {
+			for y := byte(0); y < 60; y++ {
+				chunk.SetBlock(x, y, z, 3)
 			}
-			bs[60<<8|z<<4|x] = [2]byte{2, 0}
+			chunk.SetBlock(x, 61, z, 2)
 		}
 	}
-	return
+	chunk.PopulateHeight()
+	return nil
 }

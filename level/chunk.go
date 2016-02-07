@@ -1,6 +1,10 @@
 package level
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/L7-MCPE/lav7/util/buffer"
+)
 
 // Chunk is a interface to access fixed amount of blocks.
 type Chunk interface {
@@ -30,5 +34,6 @@ type Chunk interface {
 	Mutex() *sync.RWMutex
 
 	FullChunkData() []byte
-	BlockChunk([16 * 16 * 128][2]byte)
+	Read(*buffer.Buffer) error
+	Write() (*buffer.Buffer, error)
 }

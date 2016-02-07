@@ -15,19 +15,22 @@ import (
 
 // Player is a struct for handling/containing MCPE client specific things.
 type Player struct {
-	Address             *net.UDPAddr
-	Username            string
-	ClientID            uint64
-	ClientUUIDRaw       [16]byte
-	ClientSecret        string
-	EntityID            uint64
-	Skin                []byte
-	SkinName            string
+	Address       *net.UDPAddr
+	Username      string
+	ClientID      uint64
+	ClientUUIDRaw [16]byte
+	ClientSecret  string
+	EntityID      uint64
+	Skin          []byte
+	SkinName      string
+
 	Position            util.Vector3
-	Level               level.Level
+	Level               *level.Level
 	Yaw, BodyYaw, Pitch float64
-	loggedIn            bool
-	closed              bool
+
+	sentChunks map[[2]int32]bool
+	loggedIn   bool
+	closed     bool
 }
 
 // HandlePacket handles received MCPE packet after raknet connection is established.
@@ -138,8 +141,11 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		// log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
 	case *RemoveBlock:
 		pk := pk.(*RemoveBlock)
-		log.Println("Rm:", pk.X, pk.Y, pk.Z)
-		p.Level.SetBlock(int32(pk.X), byte(pk.Y), int32(pk.Z), 0) // Air
+		p.Level.SetBlock(int32(pk.X), int32(pk.Y), int32(pk.Z), 0) // Air
+	case *UseItem:
+		pk := pk.(*UseItem)
+		p.Level.OnUseItem(int32(pk.X), int32(pk.Y), int32(pk.Z), pk.Face, pk.Item)
+		spew.Dump(pk)
 	default:
 		log.Println("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented:")
 		spew.Dump(pk)
@@ -157,6 +163,9 @@ func (p *Player) SendMessage(msg string) {
 
 // SendChunk sends given Chunk struct to client.
 func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
+	if _, exists := p.sentChunks[[2]int32{chunkX, chunkZ}]; exists {
+		return
+	}
 	i := &FullChunkData{
 		ChunkX:  uint32(chunkX),
 		ChunkZ:  uint32(chunkZ),
@@ -164,6 +173,7 @@ func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
 		Payload: c.FullChunkData(),
 	}
 	p.SendCompressed(i)
+	p.sentChunks[[2]int32{chunkX, chunkZ}] = true
 }
 
 func (p *Player) firstSpawn() {

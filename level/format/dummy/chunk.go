@@ -16,6 +16,12 @@ type Chunk struct {
 	RWMutex      *sync.RWMutex
 }
 
+func NewChunk() *Chunk {
+	return &Chunk{
+		RWMutex: new(sync.RWMutex),
+	}
+}
+
 // GetBlock implements level.Chunk interface.
 func (c Chunk) GetBlock(x, y, z byte) byte {
 	return c.blockData[uint16(y)<<8|uint16(z)<<4|uint16(x)]
@@ -144,21 +150,23 @@ func (c Chunk) FullChunkData() []byte {
 	return e
 }
 
-// BlockChunk implements level.Chunk interface.
-func (c *Chunk) BlockChunk(bs [16 * 16 * 128][2]byte) {
-	c.Mutex().Lock()
-	defer c.Mutex().Unlock()
-	for i, b := range bs {
-		c.blockData[i] = b[0]
-		if i&0x01 == 0 {
-			c.metaData[i>>1] = (c.metaData[i>>1] & 0xf0) | (b[0] & 0x0f)
-		} else {
-			c.metaData[i>>1] = (b[1]&0xf)<<4 | (c.metaData[i>>1] & 0x0f)
-		}
-	}
-	c.PopulateHeight()
-	c.beautifulize()
-}
+/*
+   // BlockChunk implements level.Chunk interface.
+   func (c *Chunk) BlockChunk(bs [16 * 16 * 128]types.Block) {
+   	c.Mutex().Lock()
+   	defer c.Mutex().Unlock()
+   	for i, b := range bs {
+   		c.blockData[i] = b.ID
+   		if i&0x01 == 0 {
+   			c.metaData[i>>1] = (c.metaData[i>>1] & 0xf0) | (b.ID & 0x0f)
+   		} else {
+   			c.metaData[i>>1] = (b.Meta&0xf)<<4 | (c.metaData[i>>1] & 0x0f)
+   		}
+   	}
+   	c.PopulateHeight()
+   	c.beautifulize()
+   }
+*/
 
 func (c *Chunk) beautifulize() {
 	for x := byte(0); x < 16; x++ {
@@ -168,13 +176,13 @@ func (c *Chunk) beautifulize() {
 	}
 }
 
-func (c *Chunk) write() *buffer.Buffer {
+func (c *Chunk) Write() (*buffer.Buffer, error) {
 	buf := new(buffer.Buffer)
 	buf.BatchWrite(c.blockData[:], c.metaData[:], c.lightData[:], c.skyLightData[:], c.heightMap[:], c.biomeData[:])
-	return buf
+	return buf, nil
 }
 
-func (c *Chunk) read(buf *buffer.Buffer) {
+func (c *Chunk) Read(buf *buffer.Buffer) error {
 	c.Mutex().Lock()
 	defer c.Mutex().Unlock()
 	copy(c.blockData[:], buf.Read(16*16*128))
@@ -183,4 +191,5 @@ func (c *Chunk) read(buf *buffer.Buffer) {
 	copy(c.skyLightData[:], buf.Read(16*16*64))
 	copy(c.heightMap[:], buf.Read(16*16))
 	copy(c.biomeData[:], buf.Read(16*16*4))
+	return nil
 }
