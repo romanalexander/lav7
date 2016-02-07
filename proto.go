@@ -5,6 +5,7 @@ import (
 
 	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/lav7/raknet"
+	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
@@ -442,6 +443,7 @@ func (i RemoveEntity) Write() *buffer.Buffer {
 
 type AddItemEntity struct {
 	EntityID uint64
+	Item     *types.Item
 	X        float32
 	Y        float32
 	Z        float32
@@ -454,7 +456,8 @@ func (i AddItemEntity) Pid() byte { return AddItemEntityHead }
 
 func (i *AddItemEntity) Read(buf *buffer.Buffer) {
 	i.EntityID = buf.ReadLong()
-	// TODO: implement slot functions
+	i.Item = new(types.Item)
+	i.Item.Read(buf)
 	i.X = buf.ReadFloat()
 	i.Y = buf.ReadFloat()
 	i.Z = buf.ReadFloat()
@@ -466,7 +469,7 @@ func (i *AddItemEntity) Read(buf *buffer.Buffer) {
 func (i AddItemEntity) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteLong(i.EntityID)
-	buf.BatchWrite(uint16(1), byte(1), uint16(1), uint16(0)) //TODO
+	buf.Write(i.Item.Write())
 	buf.WriteFloat(i.X)
 	buf.WriteFloat(i.Y)
 	buf.WriteFloat(i.Z)
@@ -874,7 +877,7 @@ func (i UpdateAttributes) Write() *buffer.Buffer { return nil }
 
 type MobEquipment struct {
 	EntityID     uint64
-	Item         uint16 // TODO: implement this after item abstraction
+	Item         *types.Item
 	Slot         byte
 	SelectedSlot byte
 }
@@ -883,7 +886,8 @@ func (i MobEquipment) Pid() byte { return MobEquipmentHead }
 
 func (i *MobEquipment) Read(buf *buffer.Buffer) {
 	i.EntityID = buf.ReadLong()
-	i.Item = buf.ReadShort()
+	i.Item = new(types.Item)
+	i.Item.Read(buf)
 	i.Slot = buf.ReadByte()
 	i.SelectedSlot = buf.ReadByte()
 }
@@ -891,25 +895,33 @@ func (i *MobEquipment) Read(buf *buffer.Buffer) {
 func (i MobEquipment) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteLong(i.EntityID)
-	buf.WriteShort(0)
+	buf.Write(i.Item.Write())
 	buf.WriteByte(i.Slot)
 	buf.WriteByte(i.SelectedSlot)
 	return buf
 }
 
-type MobArmorEquipment struct { // TODO: implement this after slots
+type MobArmorEquipment struct {
 	EntityID uint64
+	Slots    [4]*types.Item
 }
 
 func (i MobArmorEquipment) Pid() byte { return MobArmorEquipmentHead }
 
 func (i *MobArmorEquipment) Read(buf *buffer.Buffer) {
 	i.EntityID = buf.ReadLong()
+	for j := range i.Slots {
+		i.Slots[j] = new(types.Item)
+		i.Slots[j].Read(buf)
+	}
 }
 
 func (i MobArmorEquipment) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteLong(i.EntityID)
+	for j := range i.Slots {
+		buf.Write(i.Slots[j].Write())
+	}
 	return buf
 }
 
@@ -937,7 +949,7 @@ type UseItem struct {
 	Face                byte
 	FaceX, FaceY, FaceZ float32
 	PosX, PosY, PosZ    float32
-	Item                uint16 // TODO
+	Item                *types.Item
 }
 
 func (i UseItem) Pid() byte { return UseItemHead }
@@ -946,13 +958,15 @@ func (i *UseItem) Read(buf *buffer.Buffer) {
 	buf.BatchRead(&i.X, &i.Y, &i.Z,
 		&i.Face, &i.FaceX, &i.FaceY, &i.FaceZ,
 		&i.PosX, &i.PosY, &i.PosZ)
+	i.Item = new(types.Item)
+	i.Item.Read(buf)
 }
 
 func (i UseItem) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.BatchWrite(i.X, i.Y, i.Z,
 		i.Face, i.FaceX, i.FaceY, i.FaceZ,
-		i.PosX, i.PosY, i.PosZ)
+		i.PosX, i.PosY, i.PosZ, i.Item.Write())
 	return buf
 }
 
@@ -1020,7 +1034,7 @@ func (i HurtArmor) Write() *buffer.Buffer {
 	return buf
 }
 
-type SetEntityData struct{} // TODO
+type SetEntityData struct{} // TODO Metadata
 
 func (i SetEntityData) Pid() byte { return SetEntityDataHead }
 
@@ -1165,14 +1179,22 @@ func (i Respawn) Write() *buffer.Buffer {
 	return buf
 }
 
-type DropItem struct{} // TODO
+type DropItem struct {
+	Type byte
+	Item *types.Item
+}
 
 func (i DropItem) Pid() byte { return DropItemHead }
 
-func (i *DropItem) Read(buf *buffer.Buffer) {}
+func (i *DropItem) Read(buf *buffer.Buffer) {
+	i.Type = buf.ReadByte()
+	i.Item = new(types.Item)
+	i.Item.Read(buf)
+}
 
 func (i DropItem) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
+	buf.BatchWrite(i.Type, i.Item.Write())
 	return buf
 }
 
@@ -1227,6 +1249,7 @@ type ContainerSetSlot struct { // TODO: implement this after slots
 	Windowid   byte
 	Slot       uint16
 	HotbarSlot uint16
+	Item       *types.Item
 }
 
 func (i ContainerSetSlot) Pid() byte { return ContainerSetSlotHead }
@@ -1235,7 +1258,8 @@ func (i *ContainerSetSlot) Read(buf *buffer.Buffer) {
 	i.Windowid = buf.ReadByte()
 	i.Slot = buf.ReadShort()
 	i.HotbarSlot = buf.ReadShort()
-	// Unexpected code:Slot Item
+	i.Item = new(types.Item)
+	i.Item.Read(buf)
 }
 
 func (i ContainerSetSlot) Write() *buffer.Buffer {
@@ -1243,7 +1267,7 @@ func (i ContainerSetSlot) Write() *buffer.Buffer {
 	buf.WriteByte(i.Windowid)
 	buf.WriteShort(i.Slot)
 	buf.WriteShort(i.HotbarSlot)
-	// Unexpected code:Slot Item
+	buf.Write(i.Item.Write())
 	return buf
 }
 
@@ -1269,13 +1293,56 @@ func (i ContainerSetData) Write() *buffer.Buffer {
 	return buf
 }
 
-type ContainerSetContent struct{} // TODO
+const (
+	InventoryWindow byte = 0
+	ArmorWindow     byte = 0x78
+	CreativeWindow  byte = 0x79
+)
+
+type ContainerSetContent struct {
+	WindowID byte
+	Slots    []*types.Item
+	Hotbar   []uint32
+}
 
 func (i ContainerSetContent) Pid() byte { return ContainerSetContentHead }
 
-func (i *ContainerSetContent) Read(buf *buffer.Buffer) {}
+func (i *ContainerSetContent) Read(buf *buffer.Buffer) {
+	i.WindowID = buf.ReadByte()
+	count := buf.ReadShort()
+	i.Slots = make([]*types.Item, count)
+	for j := range i.Slots {
+		if !buf.Require(0) {
+			break
+		}
+		i.Slots[j] = new(types.Item)
+		i.Slots[j].Read(buf)
+	}
+	if i.WindowID == InventoryWindow {
+		count := buf.ReadShort()
+		i.Hotbar = make([]uint32, count)
+		for j := range i.Hotbar {
+			i.Hotbar[j] = buf.ReadInt()
+		}
+	}
+}
 
-func (i ContainerSetContent) Write() *buffer.Buffer { return nil }
+func (i ContainerSetContent) Write() *buffer.Buffer {
+	buf := new(buffer.Buffer)
+	buf.WriteByte(i.WindowID)
+	buf.WriteShort(uint16(len(i.Slots)))
+	for _, slot := range i.Slots {
+		buf.Write(slot.Write())
+	}
+	if i.WindowID == InventoryWindow {
+		for _, h := range i.Hotbar {
+			buf.WriteInt(h)
+		}
+	} else {
+		buf.WriteShort(0)
+	}
+	return buf
+}
 
 type CraftingData struct{} // TODO
 
