@@ -26,7 +26,7 @@ type Player struct {
 
 	Position            util.Vector3
 	Level               *level.Level
-	Yaw, BodyYaw, Pitch float64
+	Yaw, BodyYaw, Pitch float32
 
 	sentChunks map[[2]int32]bool
 	loggedIn   bool
@@ -137,8 +137,8 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		log.Println(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
 		AsPlayers(func(pp *Player) error { pp.SendMessage(fmt.Sprintf("<%s> %s", p.Username, pk.Message)); return nil })
 	case *MovePlayer:
-		//pk := pk.(*MovePlayer)
-		// log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
+		pk := pk.(*MovePlayer)
+		log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
 	case *RemoveBlock:
 		pk := pk.(*RemoveBlock)
 		p.Level.SetBlock(int32(pk.X), int32(pk.Y), int32(pk.Z), 0) // Air
@@ -174,6 +174,11 @@ func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
 	}
 	p.SendCompressed(i)
 	p.sentChunks[[2]int32{chunkX, chunkZ}] = true
+}
+
+func (p *Player) updateMove(pk *MovePlayer) {
+	p.Position.X, p.Position.Y, p.Position.Z = pk.X, pk.Y, pk.Z
+	p.Yaw, p.BodyYaw, p.Pitch = pk.Yaw, pk.BodyYaw, pk.Pitch
 }
 
 func (p *Player) firstSpawn() {
