@@ -141,7 +141,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		AsPlayers(func(pp *Player) { pp.SendMessage(fmt.Sprintf("<%s> %s", p.Username, pk.Message)) })
 	case *MovePlayer:
 		pk := pk.(*MovePlayer)
-		log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
+		// log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
 		p.updateMove(pk)
 	case *RemoveBlock:
 		pk := pk.(*RemoveBlock)

@@ -292,6 +292,8 @@ func (p *ack) Read(buf *buffer.Buffer) (f Fields) {
 }
 
 func (p *ack) Handle(f Fields, session *Session) {
+	session.recoveryLock.Lock()
+	defer session.recoveryLock.Unlock()
 	for _, seq := range f["seqs"].([]uint32) {
 		if _, ok := session.recovery[seq]; ok {
 			delete(session.recovery, seq)

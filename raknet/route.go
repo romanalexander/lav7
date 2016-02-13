@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/L7-MCPE/lav7/util/buffer"
@@ -11,6 +12,7 @@ import (
 
 var serverID uint64
 var blockList = make(map[string]time.Time)
+var blockLock = new(sync.Mutex)
 
 // Router handles packets from network, and manages sessions.
 type Router struct {
@@ -73,14 +75,16 @@ func (r *Router) receivePacket() {
 				r.sendPacket(pk)
 				continue
 			}
-			if blockList[addr.String()].After(time.Now()) {
-				r.conn.WriteToUDP([]byte("\x80\x00\x00\x00\x00\x00\x08\x15"), pk.Address)
-				continue
-			}
-			delete(blockList, addr.String())
-			if ch := GetSession(addr, r.sendChan, r.playerAdder, r.playerRemover).ReceivedChan; ch != nil {
-				ch <- pk
-			}
+			func() {
+				blockLock.Lock()
+				defer blockLock.Unlock()
+				if blockList[addr.String()].After(time.Now()) {
+					r.conn.WriteToUDP([]byte("\x80\x00\x00\x00\x00\x00\x08\x15"), pk.Address)
+				} else {
+					delete(blockList, addr.String())
+					GetSession(addr, r.sendChan, r.playerAdder, r.playerRemover).ReceivedChan <- pk
+				}
+			}()
 		}
 	}
 }
