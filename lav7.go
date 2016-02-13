@@ -4,16 +4,16 @@ import "github.com/L7-MCPE/lav7/level"
 
 const (
 	// MinecraftProtocol is a mojang network protocol version.
-	MinecraftProtocol = 43
+	MinecraftProtocol = 45
 	// MinecraftVersion is a human readable minecraft version.
-	MinecraftVersion = "0.14.0.4"
+	MinecraftVersion = "0.14.0.7"
 )
 
 // ServerName contains human readable server name
 var ServerName = "Lav7 - lightweight MCPE server"
 
 // Players is a map containing Player structs.
-var Players = make(map[string]interface{})
+var Players = make(map[string]*Player)
 
 // MaxPlayers is count of maximum available players
 var MaxPlayers = 20
