@@ -348,7 +348,7 @@ type AddPlayer struct {
 	EntityID               uint64
 	X, Y, Z                float32
 	SpeedX, SpeedY, SpeedZ float32
-	Yaw, HeadYaw, Pitch    float32
+	BodyYaw, Yaw, Pitch    float32
 	Metadata               []byte
 }
 
@@ -359,7 +359,7 @@ func (i *AddPlayer) Read(buf *buffer.Buffer) {
 	buf.BatchRead(&i.Username, &i.EntityID,
 		&i.X, &i.Y, &i.Z,
 		&i.SpeedX, &i.SpeedY, &i.SpeedZ,
-		&i.Yaw, &i.HeadYaw, &i.Pitch)
+		&i.BodyYaw, &i.Yaw, &i.Pitch)
 	i.Metadata = buf.Read(0)
 }
 
@@ -368,7 +368,7 @@ func (i AddPlayer) Write() *buffer.Buffer {
 	buf.BatchWrite(i.RawUUID[:], i.Username, i.EntityID,
 		i.X, i.Y, i.Z,
 		i.SpeedX, i.SpeedY, i.SpeedZ,
-		i.Yaw, i.HeadYaw, i.Pitch, i.Metadata)
+		i.BodyYaw, i.Yaw, i.Pitch, i.Metadata)
 	buf.WriteByte(0x7f) // Temporal, TODO: implement metadata functions
 	return buf
 }
