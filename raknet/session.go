@@ -19,7 +19,9 @@ var Sessions map[string]*Session
 var timeout = time.Second * 5
 
 // GetSession returns session with given identifier if exists, or creates new one.
-func GetSession(address *net.UDPAddr, sendChannel chan Packet, playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error) *Session {
+func GetSession(address *net.UDPAddr, sendChannel chan Packet,
+	playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error,
+	playerRemover func(*net.UDPAddr) error) *Session {
 	identifier := address.String()
 	if s, ok := Sessions[identifier]; ok {
 		return s
@@ -29,6 +31,7 @@ func GetSession(address *net.UDPAddr, sendChannel chan Packet, playerAdder func(
 	Sessions[identifier].Init(address)
 	Sessions[identifier].SendChan = sendChannel
 	Sessions[identifier].playerAdder = playerAdder
+	Sessions[identifier].playerRemover = playerRemover
 	go Sessions[identifier].work()
 	return Sessions[identifier]
 }
@@ -59,6 +62,7 @@ type Session struct {
 	channelIndex   [8]uint32
 	playerAdder    func(*net.UDPAddr) func(*buffer.Buffer) error
 	playerHandler  func(*buffer.Buffer) error
+	playerRemover  func(*net.UDPAddr) error
 	needPing       uint64
 }
 
@@ -319,7 +323,7 @@ func (s *Session) Close(reason string) {
 	s.updateTicker.Stop()
 	s.ReceivedChan = nil
 	delete(Sessions, s.Address.String())
-	delete(Players, s.Address.String())
+	s.playerRemover(s.Address)
 	blockList[s.Address.String()] = time.Now().Add(time.Second + time.Millisecond*500)
 	log.Println("Session closed:", reason)
 }

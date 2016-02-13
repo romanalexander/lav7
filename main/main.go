@@ -17,7 +17,6 @@ import (
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	raknet.Players = lav7.Players
 	lav7.GetDefaultLevel().Init(new(gen.SampleGenerator), func() level.Chunk { return dummy.NewChunk() })
 	log.Println("Generating chunks")
 	wg := new(sync.WaitGroup)
@@ -32,7 +31,7 @@ func main() {
 	log.Println("Elapsed time:", time.Since(start).Seconds(), "seconds")
 	var r *raknet.Router
 	var err error
-	if r, err = raknet.CreateRouter(lav7.RegisterPlayer, 19132); err != nil {
+	if r, err = raknet.CreateRouter(lav7.RegisterPlayer, lav7.UnregisterPlayer, 19132); err != nil {
 		fmt.Println(err)
 		return
 	}

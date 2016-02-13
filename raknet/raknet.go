@@ -16,9 +16,6 @@ const (
 	MinecraftVersion = "0.14.0.7"
 )
 
-// Players is a reference of lav7.players; it is a dirty trick to avoid import cycle.
-var Players map[string]interface{}
-
 // ServerName contains human readable server name
 var ServerName = "Lav7 - lightweight MCPE server"
 

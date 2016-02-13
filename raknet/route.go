@@ -14,14 +14,16 @@ var blockList = make(map[string]time.Time)
 
 // Router handles packets from network, and manages sessions.
 type Router struct {
-	sessions    []Session
-	conn        *net.UDPConn
-	sendChan    chan Packet
-	playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error
+	sessions      []Session
+	conn          *net.UDPConn
+	sendChan      chan Packet
+	playerAdder   func(*net.UDPAddr) func(*buffer.Buffer) error
+	playerRemover func(*net.UDPAddr) error
 }
 
 // CreateRouter create/opens new raknet router with given port.
-func CreateRouter(playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error, port uint16) (r *Router, err error) {
+func CreateRouter(playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error,
+	playerRemover func(*net.UDPAddr) error, port uint16) (r *Router, err error) {
 	InitProtocol()
 	Sessions = make(map[string]*Session)
 	r = new(Router)
@@ -30,6 +32,7 @@ func CreateRouter(playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error, por
 	r.sendChan = make(chan Packet)
 	r.conn, err = net.ListenUDP("udp", &net.UDPAddr{Port: int(port)})
 	r.playerAdder = playerAdder
+	r.playerRemover = playerRemover
 	return
 }
 
@@ -75,7 +78,7 @@ func (r *Router) receivePacket() {
 				continue
 			}
 			delete(blockList, addr.String())
-			if ch := GetSession(addr, r.sendChan, r.playerAdder).ReceivedChan; ch != nil {
+			if ch := GetSession(addr, r.sendChan, r.playerAdder, r.playerRemover).ReceivedChan; ch != nil {
 				ch <- pk
 			}
 		}

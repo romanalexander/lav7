@@ -15,7 +15,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) 
 	identifier := addr.String()
 	if _, ok := Players[identifier]; ok {
 		fmt.Println("Duplicate authentication from", addr)
-		Players[identifier].(*Player).disconnect("Logged in from another location")
+		Players[identifier].disconnect("Logged in from another location")
 	}
 	p := new(Player)
 	p.Address = addr
@@ -24,6 +24,17 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) 
 	p.sentChunks = make(map[[2]int32]bool)
 	Players[identifier] = p
 	return p.HandlePacket
+}
+
+// UnregisterPlayer removes player from server.
+func UnregisterPlayer(addr *net.UDPAddr) error {
+	identifier := addr.String()
+	if _, ok := Players[identifier]; ok {
+		// Do some things if needed
+		delete(Players, identifier)
+		return nil
+	}
+	return fmt.Errorf("Tried to remove nonexistent player: %v", addr)
 }
 
 // AsPlayers executes given callback with every online players.
@@ -39,7 +50,7 @@ func AsPlayers(callback func(*Player) error) error {
 // BroadcastPacket sends given packet to all online players.
 func BroadcastPacket(pk Packet) {
 	for _, p := range Players {
-		p.(*Player).SendPacket(pk)
+		p.SendPacket(pk)
 	}
 }
 
