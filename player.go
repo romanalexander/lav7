@@ -15,21 +15,24 @@ import (
 
 // Player is a struct for handling/containing MCPE client specific things.
 type Player struct {
-	Address       *net.UDPAddr
-	Username      string
-	ClientID      uint64
-	ClientUUIDRaw [16]byte
-	ClientSecret  string
-	EntityID      uint64
-	Skin          []byte
-	SkinName      string
+	Address  *net.UDPAddr
+	Username string
+	ID       uint64
+	UUID     [16]byte
+	Secret   string
+	EntityID uint64
+	Skin     []byte
+	SkinName string
 
 	Position            util.Vector3
 	Level               *level.Level
 	Yaw, BodyYaw, Pitch float32
 
+	playerShown map[uint64]bool
+
 	sentChunks map[[2]int32]bool
 	loggedIn   bool
+	spawned    bool
 	closed     bool
 }
 
@@ -71,9 +74,9 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		ret.Status = LoginSuccess
 		p.SendPacket(ret)
 
-		p.ClientID = pk.ClientID
-		p.ClientUUIDRaw = pk.RawUUID
-		p.ClientSecret = pk.ClientSecret
+		p.ID = pk.ClientID
+		p.UUID = pk.RawUUID
+		p.Secret = pk.ClientSecret
 		p.SkinName = pk.SkinName
 		p.Skin = pk.Skin
 
@@ -135,10 +138,11 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 			}
 		}
 		log.Println(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
-		AsPlayers(func(pp *Player) error { pp.SendMessage(fmt.Sprintf("<%s> %s", p.Username, pk.Message)); return nil })
+		AsPlayers(func(pp *Player) { pp.SendMessage(fmt.Sprintf("<%s> %s", p.Username, pk.Message)) })
 	case *MovePlayer:
 		pk := pk.(*MovePlayer)
 		log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
+		p.updateMove(pk)
 	case *RemoveBlock:
 		pk := pk.(*RemoveBlock)
 		p.Level.SetBlock(int32(pk.X), int32(pk.Y), int32(pk.Z), 0) // Air
@@ -176,16 +180,52 @@ func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
 	p.sentChunks[[2]int32{chunkX, chunkZ}] = true
 }
 
+// ShowPlayer shows given player struct to player.
+func (p *Player) ShowPlayer(player *Player) {
+	if s, ok := p.playerShown[player.EntityID]; ok && s {
+		return
+	}
+	p.SendPacket(&AddPlayer{
+		RawUUID:  player.UUID,
+		Username: player.Username,
+		EntityID: player.EntityID,
+		X:        player.Position.X,
+		Y:        player.Position.Y,
+		Z:        player.Position.Z,
+		SpeedX:   0,
+		SpeedY:   0,
+		SpeedZ:   0,
+		BodyYaw:  player.BodyYaw,
+		Yaw:      player.Yaw,
+		Pitch:    player.Pitch,
+	})
+}
+
 func (p *Player) updateMove(pk *MovePlayer) {
 	p.Position.X, p.Position.Y, p.Position.Z = pk.X, pk.Y, pk.Z
 	p.Yaw, p.BodyYaw, p.Pitch = pk.Yaw, pk.BodyYaw, pk.Pitch
+	AsPlayers(func(pl *Player) {
+		if _, ok := pl.playerShown[p.EntityID]; ok {
+			pl.SendPacket(pk)
+		}
+	})
 }
 
 func (p *Player) firstSpawn() {
+	if p.spawned {
+		return
+	}
+	for _, player := range Players {
+		if p.spawned {
+			p.ShowPlayer(player)
+		}
+	}
 	pk := &PlayStatus{
 		Status: PlayerSpawn,
 	}
 	p.SendPacket(pk)
+	SpawnPlayer(p)
+	p.spawned = true
 }
 
 // Kick kicks player from server.

@@ -38,13 +38,29 @@ func UnregisterPlayer(addr *net.UDPAddr) error {
 }
 
 // AsPlayers executes given callback with every online players.
-func AsPlayers(callback func(*Player) error) error {
+func AsPlayers(callback func(*Player)) {
 	for _, p := range Players {
-		if err := callback(p.(*Player)); err != nil {
+		callback(p)
+	}
+}
+
+// AsPlayersError is similar to AsPlayers, but breaks iteration if callback returns error
+func AsPlayersError(callback func(*Player) error) error {
+	for _, p := range Players {
+		if err := callback(p); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// SpawnPlayer shows given player to all players, except given player itself.
+func SpawnPlayer(player *Player) {
+	for _, p := range Players {
+		if p.EntityID != player.EntityID {
+			p.ShowPlayer(player)
+		}
+	}
 }
 
 // BroadcastPacket sends given packet to all online players.
@@ -73,10 +89,7 @@ func Stop(reason string) {
 		reason = "no reason"
 	}
 	fmt.Println("Stopping server: " + reason)
-	AsPlayers(func(p *Player) error {
-		p.Kick("Server stop: " + reason)
-		return nil
-	})
+	AsPlayers(func(p *Player) { p.Kick("Server stop: " + reason) })
 	for _, l := range levels {
 		l.Save()
 	}
