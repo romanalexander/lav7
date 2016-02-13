@@ -73,9 +73,10 @@ func (l Level) ChunkExists(cx, cz int32) bool {
 }
 
 func (l Level) GetChunk(cx, cz int32, create bool) Chunk {
+	l.ChunkMutex.Lock()
+	defer l.ChunkMutex.Unlock()
 	cname := strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz))
 	if c, ok := l.ChunkMap[cname]; ok {
-		log.Println("Chunkmap exists")
 		return c
 	}
 	if path, err := filepath.Abs("levels/" + l.GetName() + "/" + cname + ".raw"); err != nil {
@@ -105,8 +106,6 @@ crt:
 			log.Println("Error while generating chunk:", err)
 			c = l.ChunkCreator()
 		}
-		l.ChunkMutex.Lock()
-		defer l.ChunkMutex.Unlock()
 		l.SetChunk(cx, cz, c)
 		l.ChunkMap[cname] = c
 		return c
