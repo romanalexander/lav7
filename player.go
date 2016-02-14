@@ -237,7 +237,17 @@ func (p *Player) updateMove(pk *MovePlayer) {
 	pk.EntityID = p.EntityID
 	AsPlayers(func(pl *Player) {
 		if _, ok := pl.playerShown[p.EntityID]; ok {
-			pl.SendPacket(pk)
+			pl.SendPacket(&MoveEntity{
+				EntityIDs: []uint64{p.EntityID},
+				EntityPos: [][6]float32{[6]float32{
+					pk.X,
+					pk.Y,
+					pk.Z,
+					pk.BodyYaw,
+					pk.Yaw,
+					pk.Pitch,
+				}},
+			})
 		}
 	})
 }
