@@ -1,4 +1,4 @@
-package lav7
+package proto
 
 import (
 	"log"

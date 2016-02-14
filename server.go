@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/L7-MCPE/lav7/level"
+	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
@@ -79,7 +80,7 @@ func SpawnPlayer(player *Player) {
 }
 
 // BroadcastPacket sends given packet to all online players.
-func BroadcastPacket(pk Packet) {
+func BroadcastPacket(pk proto.Packet) {
 	for _, p := range Players {
 		p.SendPacket(pk)
 	}

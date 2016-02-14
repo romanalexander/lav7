@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/L7-MCPE/lav7"
+	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/util"
 )
 
@@ -25,7 +26,7 @@ func HandleCommand() {
 				Position: util.Vector3{0, 65, 0},
 			})
 		case "move":
-			lav7.BroadcastPacket(&lav7.MovePlayer{
+			lav7.BroadcastPacket(&proto.MovePlayer{
 				EntityID: 199,
 				X:        1,
 				Y:        64,

@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/L7-MCPE/lav7/level"
+	. "github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
