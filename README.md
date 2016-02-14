@@ -1,4 +1,6 @@
 # Lav7
+[![GoDoc](https://godoc.org/github.com/L7-MCPE/Lav7?status.svg)](https://godoc.org/github.com/L7-MCPE/Lav7)
+
 Lav7 aims to be Lightweight, rapid, concurrent Minecraft:PE server.
 The project's main goal is to provide gameplay features close to vanilla Minecraft:PE server, and handle 15~20 players on ARM11 CPU server, such as Raspberry Pi B+ Model.
 
