@@ -339,6 +339,7 @@ func (s *Session) Close(reason string) {
 	data := &EncapsulatedPacket{Buffer: buffer.FromBytes([]byte{0x15})}
 	s.sendEncapsulatedDirect(data)
 	s.updateTicker.Stop()
+	s.timeout.Stop()
 	s.closed <- struct{}{}
 	s.playerRemover(s.Address)
 	blockLock.Lock()
