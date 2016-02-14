@@ -232,6 +232,7 @@ func (p *Player) HidePlayer(player *Player) {
 func (p *Player) updateMove(pk *MovePlayer) {
 	p.Position.X, p.Position.Y, p.Position.Z = pk.X, pk.Y, pk.Z
 	p.Yaw, p.BodyYaw, p.Pitch = pk.Yaw, pk.BodyYaw, pk.Pitch
+	pk.EntityID = p.EntityID
 	AsPlayers(func(pl *Player) {
 		if _, ok := pl.playerShown[p.EntityID]; ok {
 			pl.SendPacket(pk)
