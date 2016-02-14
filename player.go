@@ -31,6 +31,7 @@ type Player struct {
 	playerShown map[uint64]bool
 
 	sentChunks map[[2]int32]bool
+	raknetChan chan<- *raknet.EncapsulatedPacket
 	loggedIn   bool
 	spawned    bool
 	closed     bool
@@ -260,11 +261,9 @@ func (p *Player) SendCompressed(pks ...Packet) {
 
 // Do not use this method for sending packet to client, this is an internal function.
 func (p *Player) send(buf *buffer.Buffer) {
-	if session, ok := raknet.Sessions[p.Address.String()]; ok {
-		ep := new(raknet.EncapsulatedPacket)
-		ep.Reliability = 2
-		ep.Buffer = buf
-		ep.Buffer.Offset = 0
-		session.SendEncapsulated(ep)
-	}
+	ep := new(raknet.EncapsulatedPacket)
+	ep.Reliability = 2
+	ep.Buffer = buf
+	ep.Buffer.Offset = 0
+	p.raknetChan <- ep
 }

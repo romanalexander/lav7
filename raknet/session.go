@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/L7-MCPE/lav7/util"
@@ -52,6 +53,7 @@ type Session struct {
 	Status         byte
 	ReceivedChan   chan Packet
 	SendChan       chan Packet
+	PlayerChan     chan *EncapsulatedPacket
 	ID             uint64
 	Address        *net.UDPAddr
 	updateTicker   *time.Ticker
@@ -83,9 +85,11 @@ type Session struct {
 func (s *Session) Init(address *net.UDPAddr) {
 	s.Address = address
 	s.ReceivedChan = make(chan Packet, chanBufsize)
+	s.PlayerChan = make(chan *EncapsulatedPacket, chanBufsize)
 	s.closed = make(chan struct{})
 	s.updateTicker = time.NewTicker(time.Millisecond * 100)
 	s.timeout = time.NewTimer(time.Millisecond * 1500)
+	s.seqNumber = 1<<32 - 1
 	s.ackQueue = make(map[uint32]bool)
 	s.nackQueue = make(map[uint32]bool)
 	s.recovery = make(map[uint32]*DataPacket)
@@ -107,6 +111,8 @@ func (s *Session) work() {
 				return
 			}
 			s.handlePacket(pk)
+		case ep := <-s.PlayerChan:
+			s.SendEncapsulated(ep)
 		case <-s.updateTicker.C:
 			s.update()
 		case <-s.timeout.C:
@@ -314,8 +320,7 @@ func (s *Session) SendEncapsulated(ep *EncapsulatedPacket) {
 func (s *Session) sendEncapsulatedDirect(ep *EncapsulatedPacket) {
 	dp := new(DataPacket)
 	dp.Head = 0x80
-	dp.SeqNumber = s.seqNumber
-	s.seqNumber++
+	dp.SeqNumber = atomic.AddUint32(&s.seqNumber, 1)
 	dp.Packets = []*EncapsulatedPacket{ep}
 	dp.Encode()
 	s.send(dp.Buffer)
@@ -331,9 +336,6 @@ func (s *Session) send(pk *buffer.Buffer) {
 
 // Close stops current session
 func (s *Session) Close(reason string) {
-	if s.ReceivedChan == nil {
-		return
-	}
 	data := &EncapsulatedPacket{Buffer: buffer.FromBytes([]byte{0x15})}
 	s.sendEncapsulatedDirect(data)
 	s.updateTicker.Stop()

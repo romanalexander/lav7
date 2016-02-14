@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/L7-MCPE/lav7/level"
+	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
@@ -22,6 +23,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) 
 	p.Level = GetDefaultLevel()
 	p.EntityID = atomic.AddUint64(&lastEntityID, 1)
 	p.sentChunks = make(map[[2]int32]bool)
+	p.raknetChan = raknet.Sessions[identifier].PlayerChan
 	Players[identifier] = p
 	return p.HandlePacket
 }
