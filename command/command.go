@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/L7-MCPE/lav7"
+	"github.com/L7-MCPE/lav7/util"
 )
 
 // HandleCommand handles command input from stdin.
@@ -17,6 +18,19 @@ func HandleCommand() {
 		switch texts[0] {
 		case "stop", "exit":
 			lav7.Stop(strings.Join(texts[1:], " "))
+		case "spawn":
+			lav7.SpawnPlayer(&lav7.Player{
+				Username: "Test",
+				EntityID: 99,
+				Position: util.Vector3{0, 65, 0},
+			})
+		case "move":
+			lav7.BroadcastPacket(&lav7.MovePlayer{
+				EntityID: 199,
+				X:        1,
+				Y:        64,
+				Z:        3,
+			})
 		}
 	}
 }

@@ -18,7 +18,7 @@ var Players = make(map[string]*Player)
 // MaxPlayers is count of maximum available players
 var MaxPlayers = 20
 
-var lastEntityID uint64
+var LastEntityID uint64
 
 var levels = map[string]*level.Level{
 	defaultLvl: new(level.Level),

@@ -27,7 +27,7 @@ type Player struct {
 	Level               *level.Level
 	Yaw, BodyYaw, Pitch float32
 
-	playerShown map[uint64]struct{}
+	playerShown map[uint64]struct{} // FIXME: Data races
 	sentChunks  map[[2]int32]bool
 
 	raknetChan chan<- *raknet.EncapsulatedPacket
@@ -278,7 +278,10 @@ func (p *Player) disconnect(msg string) {
 	buf := buffer.FromBytes([]byte{0x91})
 	buf.WriteString(msg)
 	p.send(buf)
-	raknet.Sessions[p.Address.String()].Close("disconnected from server: " + msg)
+	raknet.SessionLock.Lock()
+	s := raknet.Sessions[p.Address.String()]
+	raknet.SessionLock.Unlock()
+	s.Close("disconnected from server: " + msg)
 }
 
 // SendPacket sends given packet to client.

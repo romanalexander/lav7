@@ -22,11 +22,11 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) 
 	p := new(Player)
 	p.Address = addr
 	p.Level = GetDefaultLevel()
-	p.EntityID = atomic.AddUint64(&lastEntityID, 1)
+	p.EntityID = atomic.AddUint64(&LastEntityID, 1)
 	p.playerShown = make(map[uint64]struct{})
 	p.sentChunks = make(map[[2]int32]bool)
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
-	Players[identifier] = p
+	Players[identifier] = p //FIXME: Possible data race with AsPlayers()
 	return p.HandlePacket
 }
 
@@ -72,7 +72,7 @@ func Message(msg string) {
 // SpawnPlayer shows given player to all players, except given player itself.
 func SpawnPlayer(player *Player) {
 	for _, p := range Players {
-		if p.EntityID != player.EntityID {
+		if p.spawned && p.EntityID != player.EntityID {
 			p.ShowPlayer(player)
 		}
 	}

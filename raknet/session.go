@@ -18,15 +18,17 @@ const chanBufsize = 256
 
 // Sessions contains each raknet client sessions.
 var Sessions map[string]*Session
+
+// SessionLock is a explicit locker for Sessions map.
+var SessionLock = new(sync.Mutex)
 var timeout = time.Second * 5
-var sessLock = new(sync.Mutex)
 
 // GetSession returns session with given identifier if exists, or creates new one.
 func GetSession(address *net.UDPAddr, sendChannel chan Packet,
 	playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error,
 	playerRemover func(*net.UDPAddr) error) *Session {
-	sessLock.Lock()
-	defer sessLock.Unlock()
+	SessionLock.Lock()
+	defer SessionLock.Unlock()
 	identifier := address.String()
 	if s, ok := Sessions[identifier]; ok {
 		return s
@@ -40,9 +42,9 @@ func GetSession(address *net.UDPAddr, sendChannel chan Packet,
 	go sess.work()
 	go func() {
 		<-sess.closed
-		sessLock.Lock()
+		SessionLock.Lock()
 		delete(Sessions, identifier)
-		sessLock.Unlock()
+		SessionLock.Unlock()
 	}()
 	Sessions[identifier] = sess
 	return sess
@@ -230,7 +232,6 @@ func (s *Session) joinSplits(ep *EncapsulatedPacket) {
 	}
 	tab, ok := s.splitTable[ep.SplitID]
 	if !ok {
-		log.Println("New splitID:", ep.SplitID)
 		s.splitTable[ep.SplitID] = make(map[uint32][]byte)
 		tab = s.splitTable[ep.SplitID]
 	}
