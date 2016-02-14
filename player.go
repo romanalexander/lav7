@@ -137,7 +137,6 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 				Stop("issued by player " + p.Username)
 			}
 		}
-		log.Println(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
 		Message(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
 	case *MovePlayer:
 		pk := pk.(*MovePlayer)
