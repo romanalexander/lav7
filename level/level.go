@@ -1,3 +1,4 @@
+// Package level implements MCPE world components and defines associated interfaces.
 package level
 
 import (

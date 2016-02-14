@@ -1,3 +1,4 @@
+// Package buffer provides buffer struct and functions to handle binary streams.
 package buffer
 
 import (
