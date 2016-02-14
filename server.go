@@ -22,6 +22,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) 
 	p.Address = addr
 	p.Level = GetDefaultLevel()
 	p.EntityID = atomic.AddUint64(&lastEntityID, 1)
+	p.playerShown = make(map[uint64]struct{})
 	p.sentChunks = make(map[[2]int32]bool)
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
 	Players[identifier] = p
@@ -31,8 +32,10 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) 
 // UnregisterPlayer removes player from server.
 func UnregisterPlayer(addr *net.UDPAddr) error {
 	identifier := addr.String()
-	if _, ok := Players[identifier]; ok {
-		// Do some things if needed
+	if p, ok := Players[identifier]; ok {
+		AsPlayers(func(pl *Player) {
+			pl.HidePlayer(p)
+		})
 		delete(Players, identifier)
 		return nil
 	}

@@ -28,9 +28,9 @@ type Player struct {
 	Level               *level.Level
 	Yaw, BodyYaw, Pitch float32
 
-	playerShown map[uint64]bool
+	playerShown map[uint64]struct{}
+	sentChunks  map[[2]int32]bool
 
-	sentChunks map[[2]int32]bool
 	raknetChan chan<- *raknet.EncapsulatedPacket
 	loggedIn   bool
 	spawned    bool
@@ -183,7 +183,7 @@ func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
 
 // ShowPlayer shows given player struct to player.
 func (p *Player) ShowPlayer(player *Player) {
-	if s, ok := p.playerShown[player.EntityID]; ok && s {
+	if _, ok := p.playerShown[player.EntityID]; ok {
 		return
 	}
 	p.SendPacket(&AddPlayer{
@@ -199,6 +199,18 @@ func (p *Player) ShowPlayer(player *Player) {
 		BodyYaw:  player.BodyYaw,
 		Yaw:      player.Yaw,
 		Pitch:    player.Pitch,
+	})
+	p.playerShown[player.EntityID] = struct{}{}
+}
+
+// HidePlayer hides given player struct from player.
+func (p *Player) HidePlayer(player *Player) {
+	if _, ok := p.playerShown[player.EntityID]; !ok {
+		return
+	}
+	p.SendPacket(&RemovePlayer{
+		EntityID: player.EntityID,
+		RawUUID:  player.UUID,
 	})
 }
 
