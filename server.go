@@ -2,6 +2,7 @@ package lav7
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"sync/atomic"
@@ -57,6 +58,14 @@ func AsPlayersError(callback func(*Player) error) error {
 		}
 	}
 	return nil
+}
+
+// Message broadcasts message, and logs to console.
+func Message(msg string) {
+	AsPlayers(func(pl *Player) {
+		pl.SendMessage(msg)
+	})
+	log.Println(msg)
 }
 
 // SpawnPlayer shows given player to all players, except given player itself.
