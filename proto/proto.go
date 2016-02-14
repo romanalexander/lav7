@@ -1,3 +1,4 @@
+// Package proto provides MCPE network protocol, defined by Mojang.
 package proto
 
 import (
