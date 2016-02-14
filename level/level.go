@@ -176,7 +176,7 @@ func (l Level) GetName() string {
 func (l Level) Save() error {
 	for k, c := range l.ChunkMap {
 		path, _ := filepath.Abs("levels/" + l.GetName() + "/" + k + ".raw")
-		if err := os.MkdirAll(filepath.Dir(path), 0644); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			log.Println("Error while creating dir:", err)
 		}
 		buf, err := c.Write()
