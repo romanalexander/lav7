@@ -34,7 +34,10 @@ func (l *Level) Init(gen Generator, cc func() Chunk) {
 	l.ChunkCreator = cc
 }
 
-// Face direction
+// OnUseItem handles UseItemPacket and determines position to update block position.
+// Note: Value of x, y, z could be changed
+//
+// Face direction:
 //
 // 0: Down  (Y-)
 // 1: Up    (Y+)
@@ -42,29 +45,29 @@ func (l *Level) Init(gen Generator, cc func() Chunk) {
 // 3: South (Z+)
 // 4: West  (X-)
 // 5: East  (X+)
-func (l *Level) OnUseItem(x, y, z int32, face byte, item *types.Item) {
+func (l *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (canceled bool) {
 	log.Println("OnTouch:", x, y, z, face)
-	px, py, pz := x, y, z
 	switch face {
 	case 0:
-		py--
+		*y--
 	case 1:
-		py++
+		*y++
 	case 2:
-		pz--
+		*z--
 	case 3:
-		pz++
+		*z++
 	case 4:
-		px--
+		*x--
 	case 5:
-		px++
+		*x++
 	}
-	if f := l.GetBlock(px, py, pz); f == 0 {
-		log.Printf("SetBlock %d %d %d %v", px, py, pz, item.Block())
-		l.Set(px, py, pz, item.Block())
+	if f := l.GetBlock(*x, *y, *z); f == 0 {
+		log.Printf("SetBlock %d %d %d %v", *x, *y, *z, item.Block())
+		l.Set(*x, *y, *z, item.Block())
 	} else {
 		log.Println("Block", f)
 	}
+	return
 }
 
 func (l Level) ChunkExists(cx, cz int32) bool {

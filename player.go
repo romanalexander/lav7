@@ -1,7 +1,6 @@
 package lav7
 
 import (
-	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -149,11 +148,27 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		p.Level.SetBlock(int32(pk.X), int32(pk.Y), int32(pk.Z), 0) // Air
 	case *UseItem:
 		pk := pk.(*UseItem)
-		p.Level.OnUseItem(int32(pk.X), int32(pk.Y), int32(pk.Z), pk.Face, pk.Item)
+		px, py, pz := int32(pk.X), int32(pk.Y), int32(pk.Z)
+		if !p.Level.OnUseItem(&px, &py, &pz, pk.Face, pk.Item) {
+			AsPlayers(func(pl *Player) {
+				if pl.EntityID == p.EntityID {
+					return
+				}
+				pl.SendPacket(&UpdateBlock{
+					BlockRecords: []BlockRecord{
+						BlockRecord{
+							X: uint32(px),
+							Y: byte(py),
+							Z: uint32(pz),
+						},
+					},
+				})
+			})
+		}
 		spew.Dump(pk)
 	default:
-		log.Println("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented:")
-		spew.Dump(pk)
+		// log.Println("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented:")
+		// spew.Dump(pk)
 	}
 	return
 }
