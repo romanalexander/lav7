@@ -157,9 +157,11 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 				pl.SendPacket(&UpdateBlock{
 					BlockRecords: []BlockRecord{
 						BlockRecord{
-							X: uint32(px),
-							Y: byte(py),
-							Z: uint32(pz),
+							X:    uint32(px),
+							Y:    byte(py),
+							Z:    uint32(pz),
+							ID:   byte(pk.Item.ID),
+							Meta: byte(pk.Item.Meta),
 						},
 					},
 				})
@@ -255,6 +257,7 @@ func (p *Player) firstSpawn() {
 	p.SendPacket(pk)
 	SpawnPlayer(p)
 	p.spawned = true
+	Message(p.Username + " joined")
 }
 
 // Kick kicks player from server.

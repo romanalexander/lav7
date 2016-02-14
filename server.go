@@ -38,6 +38,7 @@ func UnregisterPlayer(addr *net.UDPAddr) error {
 			pl.HidePlayer(p)
 		})
 		delete(Players, identifier)
+		Message(p.Username + " disconnected")
 		return nil
 	}
 	return fmt.Errorf("Tried to remove nonexistent player: %v", addr)
