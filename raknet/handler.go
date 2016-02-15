@@ -490,9 +490,9 @@ func (p *pong) Read(buf *buffer.Buffer) (f Fields) {
 }
 
 func (p *pong) Handle(f Fields, session *Session) {
-	if session.needPing != 0 && f["pingID"].(uint64) == session.needPing {
+	if session.pingTries > 0 {
 		session.timeout.Reset(timeout)
-		session.needPing = 0
+		session.pingTries = 0
 	}
 	return
 }

@@ -30,7 +30,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 	ch := make(chan *buffer.Buffer, 64)
 	p.recvChan = ch
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
-	p.callbackChan = make(chan func(*Player))
+	p.callbackChan = make(chan func(*Player), 32)
 	iteratorLock.Lock()
 	Players[identifier] = p
 	iteratorLock.Unlock()

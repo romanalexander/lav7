@@ -50,8 +50,8 @@ func (r *Router) receivePacket() {
 		var n int
 		var addr *net.UDPAddr
 		var err error
-		var recvbuf = make([]byte, 1024*1024*4)
-		if n, addr, err = r.conn.ReadFromUDP(recvbuf); err != nil {
+		var recvbuf [1024 * 1024]byte
+		if n, addr, err = r.conn.ReadFromUDP(recvbuf[:]); err != nil {
 			fmt.Println("Error while reading packet:", err)
 			continue
 		} else if n > 0 {

@@ -15,13 +15,14 @@ import (
 
 const windowSize = 2048
 const chanBufsize = 256
+const MaxPingTries uint64 = 3
 
 // Sessions contains each raknet client sessions.
 var Sessions map[string]*Session
 
 // SessionLock is a explicit locker for Sessions map.
 var SessionLock = new(sync.Mutex)
-var timeout = time.Second * 5
+var timeout = time.Millisecond * 1500
 
 // GetSession returns session with given identifier if exists, or creates new one.
 func GetSession(address *net.UDPAddr, sendChannel chan Packet,
@@ -79,7 +80,7 @@ type Session struct {
 	channelIndex   [8]uint32
 	playerAdder    func(*net.UDPAddr) chan<- *buffer.Buffer
 	playerRemover  func(*net.UDPAddr) error
-	needPing       uint64
+	pingTries      uint64
 	closed         chan struct{}
 }
 
@@ -118,15 +119,14 @@ func (s *Session) work() {
 		case <-s.updateTicker.C:
 			s.update()
 		case <-s.timeout.C:
-			if s.Status < 3 || s.needPing != 0 {
+			if s.Status < 3 || s.pingTries >= MaxPingTries {
 				s.Close("timeout")
 				break
 			}
-			s.needPing = (uint64(rand.Uint32())<<33 | uint64(rand.Uint32())<<1) + 1
-			log.Println("No signal: sending ping, PingID", s.needPing)
 			s.sendEncapsulatedDirect(&EncapsulatedPacket{Buffer: new(ping).Write(Fields{
-				"pingID": s.needPing,
+				"pingID": uint64(rand.Uint32())<<32 | uint64(rand.Uint32()),
 			})})
+			s.pingTries++
 			s.timeout.Reset(timeout)
 		}
 	}

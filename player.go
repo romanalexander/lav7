@@ -219,7 +219,7 @@ func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
 
 // ShowPlayer shows given player struct to player.
 func (p *Player) ShowPlayer(player *Player) {
-	if _, ok := p.playerShown[player.EntityID]; ok {
+	if p.IsVisible(player) || p.IsSelf(player) {
 		return
 	}
 	p.SendPacket(&AddPlayer{
@@ -241,7 +241,7 @@ func (p *Player) ShowPlayer(player *Player) {
 
 // HidePlayer hides given player struct from player.
 func (p *Player) HidePlayer(player *Player) {
-	if _, ok := p.playerShown[player.EntityID]; !ok {
+	if !p.IsVisible(player) || p.IsSelf(player) {
 		return
 	}
 	p.SendPacket(&RemovePlayer{
@@ -250,12 +250,23 @@ func (p *Player) HidePlayer(player *Player) {
 	})
 }
 
+// IsVisible determines if the player can see given player struct
+func (p *Player) IsVisible(player *Player) bool {
+	_, ok := p.playerShown[player.EntityID]
+	return ok
+}
+
+// IsSelf determines if given player is the player self
+func (p *Player) IsSelf(player *Player) bool {
+	return p.EntityID == player.EntityID
+}
+
 func (p *Player) updateMove(pk *MovePlayer) {
 	p.Position.X, p.Position.Y, p.Position.Z = pk.X, pk.Y, pk.Z
 	p.Yaw, p.BodyYaw, p.Pitch = pk.Yaw, pk.BodyYaw, pk.Pitch
 	pk.EntityID = p.EntityID
-	AsPlayers(func(pl *Player) {
-		if _, ok := pl.playerShown[p.EntityID]; ok {
+	BroadcastCallback(func(pl *Player) {
+		if pl.IsVisible(p) {
 			pl.SendPacket(&MoveEntity{
 				EntityIDs: []uint64{p.EntityID},
 				EntityPos: [][6]float32{[6]float32{
