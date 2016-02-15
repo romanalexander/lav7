@@ -25,7 +25,7 @@ var timeout = time.Second * 5
 
 // GetSession returns session with given identifier if exists, or creates new one.
 func GetSession(address *net.UDPAddr, sendChannel chan Packet,
-	playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error,
+	playerAdder func(*net.UDPAddr) chan<- *buffer.Buffer,
 	playerRemover func(*net.UDPAddr) error) *Session {
 	SessionLock.Lock()
 	defer SessionLock.Unlock()
@@ -53,9 +53,10 @@ func GetSession(address *net.UDPAddr, sendChannel chan Packet,
 // Session contains player specific values for raknet-level communication.
 type Session struct {
 	Status         byte
-	ReceivedChan   chan Packet
-	SendChan       chan Packet
-	PlayerChan     chan *EncapsulatedPacket
+	ReceivedChan   chan Packet              // Packet from router
+	SendChan       chan Packet              // Send request to router
+	PlayerChan     chan *EncapsulatedPacket // Send request from player
+	packetChan     chan<- *buffer.Buffer    // Packet delivery to player
 	ID             uint64
 	Address        *net.UDPAddr
 	updateTicker   *time.Ticker
@@ -70,17 +71,16 @@ type Session struct {
 	reliableWindow map[uint32]*EncapsulatedPacket
 	reliableBorder [2]uint32 // Window range: [windowBorder[0], windowBorder[1])
 	splitTable     map[uint16]map[uint32][]byte
-	seqNumber      uint32
-	lastSeq        uint32
+	seqNumber      uint32 // Send
+	lastSeq        uint32 // Recv
 	lastMsgIndex   uint32
 	splitID        uint16
 	messageIndex   uint32
 	channelIndex   [8]uint32
-	playerAdder    func(*net.UDPAddr) func(*buffer.Buffer) error
-	playerHandler  func(*buffer.Buffer) error
+	playerAdder    func(*net.UDPAddr) chan<- *buffer.Buffer
 	playerRemover  func(*net.UDPAddr) error
 	needPing       uint64
-	closed         chan (struct{})
+	closed         chan struct{}
 }
 
 // Init sets initial value for session.
@@ -258,7 +258,7 @@ func (s *Session) handleEncapsulated(ep *EncapsulatedPacket) {
 	head := ep.ReadByte()
 
 	if s.Status > 2 && head == 0x8e {
-		s.playerHandler(ep.Buffer)
+		s.packetChan <- ep.Buffer
 	}
 
 	if handler := GetDataHandler(head); handler != nil {
@@ -270,7 +270,7 @@ func (s *Session) connComplete() {
 	if s.Status < 3 {
 		return
 	}
-	s.playerHandler = s.playerAdder(s.Address)
+	s.packetChan = s.playerAdder(s.Address)
 }
 
 // SendEncapsulated processes EncapsulatedPacket informations before sending.
@@ -341,6 +341,7 @@ func (s *Session) Close(reason string) {
 	s.sendEncapsulatedDirect(data)
 	s.updateTicker.Stop()
 	s.timeout.Stop()
+	close(s.ReceivedChan)
 	s.closed <- struct{}{}
 	s.playerRemover(s.Address)
 	blockLock.Lock()

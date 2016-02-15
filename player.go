@@ -8,6 +8,7 @@ import (
 	"github.com/L7-MCPE/lav7/level"
 	. "github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
+	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
 	"github.com/davecgh/go-spew/spew"
@@ -31,10 +32,23 @@ type Player struct {
 	playerShown map[uint64]struct{} // FIXME: Data races
 	sentChunks  map[[2]int32]bool
 
+	recvChan   chan *buffer.Buffer
 	raknetChan chan<- *raknet.EncapsulatedPacket
 	loggedIn   bool
 	spawned    bool
 	closed     bool
+}
+
+func (p *Player) process() {
+	for {
+		select {
+		case buf, ok := <-p.recvChan:
+			if !ok {
+				return
+			}
+			p.HandlePacket(buf)
+		}
+	}
 }
 
 // HandlePacket handles received MCPE packet after raknet connection is established.
@@ -157,11 +171,13 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 				pl.SendPacket(&UpdateBlock{
 					BlockRecords: []BlockRecord{
 						BlockRecord{
-							X:    uint32(px),
-							Y:    byte(py),
-							Z:    uint32(pz),
-							ID:   byte(pk.Item.ID),
-							Meta: byte(pk.Item.Meta),
+							X: uint32(px),
+							Y: byte(py),
+							Z: uint32(pz),
+							Block: types.Block{
+								ID:   byte(pk.Item.ID),
+								Meta: byte(pk.Item.Meta),
+							},
 						},
 					},
 				})
@@ -256,11 +272,11 @@ func (p *Player) firstSpawn() {
 	if p.spawned {
 		return
 	}
-	for _, player := range Players {
+	AsPlayers(func(player *Player) {
 		if p.spawned {
 			p.ShowPlayer(player)
 		}
-	}
+	})
 	pk := &PlayStatus{
 		Status: PlayerSpawn,
 	}

@@ -19,12 +19,12 @@ type Router struct {
 	sessions      []Session
 	conn          *net.UDPConn
 	sendChan      chan Packet
-	playerAdder   func(*net.UDPAddr) func(*buffer.Buffer) error
+	playerAdder   func(*net.UDPAddr) chan<- *buffer.Buffer
 	playerRemover func(*net.UDPAddr) error
 }
 
 // CreateRouter create/opens new raknet router with given port.
-func CreateRouter(playerAdder func(*net.UDPAddr) func(*buffer.Buffer) error,
+func CreateRouter(playerAdder func(*net.UDPAddr) chan<- *buffer.Buffer,
 	playerRemover func(*net.UDPAddr) error, port uint16) (r *Router, err error) {
 	InitProtocol()
 	Sessions = make(map[string]*Session)

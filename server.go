@@ -14,7 +14,7 @@ import (
 )
 
 // RegisterPlayer registers player to the server and returns packet handler function for it.
-func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) {
+func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 	identifier := addr.String()
 	if _, ok := Players[identifier]; ok {
 		fmt.Println("Duplicate authentication from", addr)
@@ -26,17 +26,23 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerFunc func(*buffer.Buffer) error) 
 	p.EntityID = atomic.AddUint64(&LastEntityID, 1)
 	p.playerShown = make(map[uint64]struct{})
 	p.sentChunks = make(map[[2]int32]bool)
+	ch := make(chan *buffer.Buffer, 64)
+	p.recvChan = ch
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
-	Players[identifier] = p //FIXME: Possible data race with AsPlayers()
-	return p.HandlePacket
+	iteratorLock.Lock()
+	Players[identifier] = p
+	iteratorLock.Unlock()
+	go p.process()
+	return ch
 }
 
 // UnregisterPlayer removes player from server.
 func UnregisterPlayer(addr *net.UDPAddr) error {
 	identifier := addr.String()
 	if p, ok := Players[identifier]; ok {
+		close(p.recvChan)
 		AsPlayers(func(pl *Player) {
-			pl.HidePlayer(p)
+			pl.HidePlayer(p) //FIXME: semms not working
 		})
 		delete(Players, identifier)
 		Message(p.Username + " disconnected")
@@ -47,13 +53,29 @@ func UnregisterPlayer(addr *net.UDPAddr) error {
 
 // AsPlayers executes given callback with every online players.
 func AsPlayers(callback func(*Player)) {
+	iteratorLock.Lock()
+	defer iteratorLock.Unlock()
 	for _, p := range Players {
 		callback(p)
 	}
 }
 
+// AsPlayersAsync is similar to AsPlayers, buf spawns new goroutine for each players.
+// Warning: this could be a lot of overhead. Use with caution.
+func AsPlayersAsync(callback func(*Player)) {
+	for _, p := range Players {
+		go func(pp *Player) {
+			iteratorLock.Lock()
+			defer iteratorLock.Unlock()
+			callback(pp)
+		}(p)
+	}
+}
+
 // AsPlayersError is similar to AsPlayers, but breaks iteration if callback returns error
 func AsPlayersError(callback func(*Player) error) error {
+	iteratorLock.Lock()
+	defer iteratorLock.Unlock()
 	for _, p := range Players {
 		if err := callback(p); err != nil {
 			return err
@@ -72,11 +94,11 @@ func Message(msg string) {
 
 // SpawnPlayer shows given player to all players, except given player itself.
 func SpawnPlayer(player *Player) {
-	for _, p := range Players {
+	AsPlayers(func(p *Player) {
 		if p.spawned && p.EntityID != player.EntityID {
 			p.ShowPlayer(player)
 		}
-	}
+	})
 }
 
 // BroadcastPacket sends given packet to all online players.
