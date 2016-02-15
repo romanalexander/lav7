@@ -117,15 +117,15 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		zRadius := int32(2)
 		chunkChan := make(chan struct {
 			x, z int32
-			c    level.Chunk
+			c    *types.Chunk
 		}, (xRadius*2+1)*(zRadius*2+1))
 		go func() {
 			for x := -xRadius; x <= xRadius; x++ {
 				for z := -zRadius; z <= zRadius; z++ {
 					chunkChan <- struct {
 						x, z int32
-						c    level.Chunk
-					}{x, z, p.Level.GetChunk(x, z, true)}
+						c    *types.Chunk
+					}{x, z, p.Level.Provider().GetChunk(x, z, true)}
 				}
 			}
 		}()
@@ -203,7 +203,7 @@ func (p *Player) SendMessage(msg string) {
 }
 
 // SendChunk sends given Chunk struct to client.
-func (p *Player) SendChunk(chunkX, chunkZ int32, c level.Chunk) {
+func (p *Player) SendChunk(chunkX, chunkZ int32, c *types.Chunk) {
 	if _, exists := p.sentChunks[[2]int32{chunkX, chunkZ}]; exists {
 		return
 	}

@@ -1,4 +1,4 @@
-package dummy
+package types
 
 import (
 	"sync"
@@ -13,13 +13,7 @@ type Chunk struct {
 	skyLightData [16 * 16 * 64]byte // Nibbles
 	heightMap    [16 * 16]byte
 	biomeData    [16 * 16 * 4]byte // Uints
-	RWMutex      *sync.RWMutex
-}
-
-func NewChunk() *Chunk {
-	return &Chunk{
-		RWMutex: new(sync.RWMutex),
-	}
+	mutex        *sync.RWMutex
 }
 
 // GetBlock implements level.Chunk interface.
@@ -134,13 +128,18 @@ func (c *Chunk) PopulateHeight() {
 
 // Mutex implements level.Chunk interface.
 func (c *Chunk) Mutex() *sync.RWMutex {
-	return c.RWMutex
+	return c.mutex
+}
+
+// FromGen implements level.Chunk interface.
+func (c *Chunk) FromGen([16][16][128]Chunk) {
+
 }
 
 // FullChunkData returns full chunk payload for FullChunkDataPacket.
 func (c Chunk) FullChunkData() []byte {
-	c.Mutex().RLock()
-	defer c.Mutex().RUnlock()
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 	a := append(c.blockData[:], c.metaData[:]...)     // Block ID, Block Metadata
 	b := append(c.skyLightData[:], c.lightData[:]...) // SkyLight, Light
 	c_ := append(c.heightMap[:], c.biomeData[:]...)   // Height Map, Biome colors
@@ -153,8 +152,8 @@ func (c Chunk) FullChunkData() []byte {
 /*
    // BlockChunk implements level.Chunk interface.
    func (c *Chunk) BlockChunk(bs [16 * 16 * 128]types.Block) {
-   	c.Mutex().Lock()
-   	defer c.Mutex().Unlock()
+   	c.mutex.Lock()
+   	defer c.mutex.Unlock()
    	for i, b := range bs {
    		c.blockData[i] = b.ID
    		if i&0x01 == 0 {
@@ -183,8 +182,8 @@ func (c *Chunk) Write() (*buffer.Buffer, error) {
 }
 
 func (c *Chunk) Read(buf *buffer.Buffer) error {
-	c.Mutex().Lock()
-	defer c.Mutex().Unlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	copy(c.blockData[:], buf.Read(16*16*128))
 	copy(c.metaData[:], buf.Read(16*16*64))
 	copy(c.lightData[:], buf.Read(16*16*64))
