@@ -32,11 +32,12 @@ type Player struct {
 	playerShown map[uint64]struct{} // FIXME: Data races
 	sentChunks  map[[2]int32]bool
 
-	recvChan   chan *buffer.Buffer
-	raknetChan chan<- *raknet.EncapsulatedPacket
-	loggedIn   bool
-	spawned    bool
-	closed     bool
+	recvChan     chan *buffer.Buffer
+	raknetChan   chan<- *raknet.EncapsulatedPacket
+	callbackChan chan func(*Player)
+	loggedIn     bool
+	spawned      bool
+	closed       bool
 }
 
 func (p *Player) process() {
@@ -47,6 +48,8 @@ func (p *Player) process() {
 				return
 			}
 			p.HandlePacket(buf)
+		case callback := <-p.callbackChan:
+			callback(p)
 		}
 	}
 }
@@ -272,10 +275,8 @@ func (p *Player) firstSpawn() {
 	if p.spawned {
 		return
 	}
-	AsPlayers(func(player *Player) {
-		if p.spawned {
-			p.ShowPlayer(player)
-		}
+	BroadcastCallback(func(player *Player) {
+		player.ShowPlayer(p)
 	})
 	pk := &PlayStatus{
 		Status: PlayerSpawn,
@@ -317,6 +318,12 @@ func (p *Player) SendCompressed(pks ...Packet) {
 		batch.Payloads[i] = append([]byte{pk.Pid()}, pk.Write().Done()...)
 	}
 	p.SendPacket(batch)
+}
+
+// RunAs runs given callback on the player's goroutine.
+// You should use this if you need access to other players' fields.
+func (p *Player) RunAs(callback func(*Player)) {
+	p.callbackChan <- callback
 }
 
 // Do not use this method for sending packet to client, this is an internal function.

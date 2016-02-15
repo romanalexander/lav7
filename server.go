@@ -30,6 +30,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 	ch := make(chan *buffer.Buffer, 64)
 	p.recvChan = ch
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
+	p.callbackChan = make(chan func(*Player))
 	iteratorLock.Lock()
 	Players[identifier] = p
 	iteratorLock.Unlock()
@@ -61,6 +62,8 @@ func UnregisterPlayer(addr *net.UDPAddr) error {
 }
 
 // AsPlayers executes given callback with every online players.
+//
+// Warning: callbacks are executed in separate, copied map of lav7.Players. Callbacks can run with disconnected player.
 func AsPlayers(callback func(*Player)) {
 	iteratorLock.Lock()
 	pm := getMapCopy()
@@ -71,7 +74,8 @@ func AsPlayers(callback func(*Player)) {
 }
 
 // AsPlayersAsync is similar to AsPlayers, buf spawns new goroutine for each players.
-// AsPlayersAsync returns sync.WaitGroup struct to synchronize with callbacks.
+// It returns sync.WaitGroup struct to synchronize with callbacks.
+//
 // Warning: this could be a lot of overhead. Use with caution.
 func AsPlayersAsync(callback func(*Player)) *sync.WaitGroup {
 	iteratorLock.Lock()
@@ -99,6 +103,13 @@ func AsPlayersError(callback func(*Player) error) error {
 		}
 	}
 	return nil
+}
+
+// BroadcastCallback is same as AsPlayers(RunAs())
+func BroadcastCallback(callback func(*Player)) {
+	AsPlayers(func(p *Player) {
+		p.RunAs(callback)
+	})
 }
 
 func getMapCopy() map[string]*Player {
