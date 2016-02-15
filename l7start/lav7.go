@@ -10,12 +10,15 @@ import (
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/command"
 	"github.com/L7-MCPE/lav7/level/format/dummy"
+	"github.com/L7-MCPE/lav7/level/gen"
 	"github.com/L7-MCPE/lav7/raknet"
 )
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	lav7.GetDefaultLevel().Init(new(dummy.Provider))
+	p := new(dummy.Provider)
+	p.Init(new(gen.SampleGenerator).Gen)
+	lav7.GetDefaultLevel().Init(p)
 	log.Println("Generating chunks")
 	wg := new(sync.WaitGroup)
 	wg.Add(25)

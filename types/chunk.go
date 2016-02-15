@@ -16,6 +16,10 @@ type Chunk struct {
 	mutex        *sync.RWMutex
 }
 
+func (c *Chunk) Init() {
+	c.mutex = new(sync.RWMutex)
+}
+
 // GetBlock implements level.Chunk interface.
 func (c Chunk) GetBlock(x, y, z byte) byte {
 	return c.blockData[uint16(y)<<8|uint16(z)<<4|uint16(x)]
@@ -132,7 +136,7 @@ func (c *Chunk) Mutex() *sync.RWMutex {
 }
 
 // FromGen implements level.Chunk interface.
-func (c *Chunk) FromGen([16][16][128]Chunk) {
+func (c *Chunk) FromGen([16][16][128]Block) {
 
 }
 

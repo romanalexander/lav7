@@ -20,12 +20,18 @@ type Provider struct {
 	Generator  func(int32, int32) *types.Chunk
 }
 
-func (pv Provider) ChunkExists(cx, cz int32) bool {
+func (pv *Provider) Init(gen func(int32, int32) *types.Chunk) {
+	pv.ChunkMap = make(map[[2]int32]*types.Chunk)
+	pv.ChunkMutex = new(sync.Mutex)
+	pv.Generator = gen
+}
+
+func (pv *Provider) ChunkExists(cx, cz int32) bool {
 	_, ok := pv.ChunkMap[[2]int32{cx, cz}]
 	return ok
 }
 
-func (pv Provider) GetChunk(cx, cz int32, create bool) (chk *types.Chunk) {
+func (pv *Provider) GetChunk(cx, cz int32, create bool) (chk *types.Chunk) {
 	pv.ChunkMutex.Lock()
 	defer pv.ChunkMutex.Unlock()
 	if c, ok := pv.ChunkMap[[2]int32{cx, cz}]; ok {
@@ -46,21 +52,22 @@ func (pv Provider) GetChunk(cx, cz int32, create bool) (chk *types.Chunk) {
 			goto crt
 		}
 		chk = new(types.Chunk)
+		chk.Init()
 		buf := buffer.FromBytes(b)
 		chk.Read(buf)
-		pv.SetChunk(cx, cz, false, chk)
+		pv.ChunkMap[[2]int32{cx, cz}] = chk
 		return
 	}
 crt:
 	if create {
 		chk = pv.Generator(cx, cz)
-		pv.SetChunk(cx, cz, false, chk)
+		pv.ChunkMap[[2]int32{cx, cz}] = chk
 		return
 	}
 	return
 }
 
-func (pv Provider) SetChunk(cx, cz int32, force bool, c *types.Chunk) {
+func (pv *Provider) SetChunk(cx, cz int32, force bool, c *types.Chunk) {
 	pv.ChunkMutex.Lock()
 	defer pv.ChunkMutex.Unlock()
 	if _, ok := pv.ChunkMap[[2]int32{cx, cz}]; !force && ok {
@@ -72,7 +79,7 @@ func (pv Provider) SetChunk(cx, cz int32, force bool, c *types.Chunk) {
 	pv.ChunkMap[[2]int32{cx, cz}] = c
 }
 
-func (pv Provider) Save(name string) error {
+func (pv *Provider) Save(name string) error {
 	pv.ChunkMutex.Lock()
 	defer pv.ChunkMutex.Unlock()
 	for k, c := range pv.ChunkMap {
