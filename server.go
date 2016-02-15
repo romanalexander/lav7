@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 	"sync/atomic"
 
 	"github.com/L7-MCPE/lav7/level"
@@ -39,49 +40,73 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 // UnregisterPlayer removes player from server.
 func UnregisterPlayer(addr *net.UDPAddr) error {
 	identifier := addr.String()
+	iteratorLock.Lock()
 	if p, ok := Players[identifier]; ok {
+		iteratorLock.Unlock()
 		close(p.recvChan)
 		AsPlayers(func(pl *Player) {
+			if p.EntityID == pl.EntityID {
+				return
+			}
 			pl.HidePlayer(p) //FIXME: semms not working
 		})
+		iteratorLock.Lock()
 		delete(Players, identifier)
+		iteratorLock.Unlock()
 		Message(p.Username + " disconnected")
 		return nil
 	}
+	iteratorLock.Unlock()
 	return fmt.Errorf("Tried to remove nonexistent player: %v", addr)
 }
 
 // AsPlayers executes given callback with every online players.
 func AsPlayers(callback func(*Player)) {
 	iteratorLock.Lock()
-	defer iteratorLock.Unlock()
-	for _, p := range Players {
+	pm := getMapCopy()
+	iteratorLock.Unlock()
+	for _, p := range pm {
 		callback(p)
 	}
 }
 
 // AsPlayersAsync is similar to AsPlayers, buf spawns new goroutine for each players.
+// AsPlayersAsync returns sync.WaitGroup struct to synchronize with callbacks.
 // Warning: this could be a lot of overhead. Use with caution.
-func AsPlayersAsync(callback func(*Player)) {
-	for _, p := range Players {
-		go func(pp *Player) {
-			iteratorLock.Lock()
-			defer iteratorLock.Unlock()
+func AsPlayersAsync(callback func(*Player)) *sync.WaitGroup {
+	iteratorLock.Lock()
+	pm := getMapCopy()
+	iteratorLock.Unlock()
+	wg := new(sync.WaitGroup)
+	for _, p := range pm {
+		wg.Add(1)
+		go func(pp *Player, w *sync.WaitGroup) {
 			callback(pp)
-		}(p)
+			w.Done()
+		}(p, wg)
 	}
+	return wg
 }
 
 // AsPlayersError is similar to AsPlayers, but breaks iteration if callback returns error
 func AsPlayersError(callback func(*Player) error) error {
 	iteratorLock.Lock()
-	defer iteratorLock.Unlock()
-	for _, p := range Players {
+	pm := getMapCopy()
+	iteratorLock.Unlock()
+	for _, p := range pm {
 		if err := callback(p); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func getMapCopy() map[string]*Player {
+	m := make(map[string]*Player)
+	for k := range Players {
+		m[k] = Players[k]
+	}
+	return m
 }
 
 // Message broadcasts message, and logs to console.

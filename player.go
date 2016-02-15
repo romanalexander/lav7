@@ -102,10 +102,10 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 			Gamemode:  1, // 0: Survival, 1: Creative
 			EntityID:  0, // Player eid set to 0
 			SpawnX:    0,
-			SpawnY:    120,
+			SpawnY:    65,
 			SpawnZ:    0,
 			X:         0,
-			Y:         120,
+			Y:         65,
 			Z:         0,
 		})
 

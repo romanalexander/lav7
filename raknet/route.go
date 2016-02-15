@@ -31,7 +31,7 @@ func CreateRouter(playerAdder func(*net.UDPAddr) chan<- *buffer.Buffer,
 	r = new(Router)
 	serverID = uint64(rand.Int63())
 	r.sessions = make([]Session, 0)
-	r.sendChan = make(chan Packet)
+	r.sendChan = make(chan Packet, chanBufsize)
 	r.conn, err = net.ListenUDP("udp", &net.UDPAddr{Port: int(port)})
 	r.playerAdder = playerAdder
 	r.playerRemover = playerRemover
