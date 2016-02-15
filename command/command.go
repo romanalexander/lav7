@@ -2,8 +2,9 @@ package command
 
 import (
 	"bufio"
+	"fmt"
 	"os"
-	"runtime/debug"
+	"runtime"
 	"strings"
 
 	"github.com/L7-MCPE/lav7"
@@ -20,7 +21,7 @@ func HandleCommand() {
 		texts := strings.Split(strings.Replace(text[:len(text)-1], "\r", "", -1), " ")
 		switch texts[0] {
 		case "stop", "exit":
-			lav7.Stop(strings.Join(texts[1:], " "))
+			go lav7.Stop(strings.Join(texts[1:], " "))
 		case "spawn":
 			lav7.SpawnPlayer(&lav7.Player{
 				Username: "Test",
@@ -48,7 +49,9 @@ func HandleCommand() {
 				BlockRecords: br,
 			})
 		case "trace":
-			debug.PrintStack()
+			b := make([]byte, 4096)
+			n := runtime.Stack(b, true)
+			fmt.Println(string(b[:n]))
 		}
 	}
 }
