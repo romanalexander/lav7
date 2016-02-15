@@ -614,9 +614,10 @@ const (
 )
 
 type BlockRecord struct {
-	X, Z            uint32
-	Y               byte
-	ID, Meta, Flags byte
+	X, Z  uint32
+	Y     byte
+	Block types.Block
+	Flags byte
 }
 
 type UpdateBlock struct {
@@ -634,7 +635,15 @@ func (i *UpdateBlock) Read(buf *buffer.Buffer) {
 		y := buf.ReadByte()
 		id := buf.ReadByte()
 		flagMeta := buf.ReadByte()
-		i.BlockRecords[k] = BlockRecord{X: x, Y: y, Z: z, ID: id, Meta: flagMeta & 0x0f, Flags: (flagMeta >> 4) & 0x0f}
+		i.BlockRecords[k] = BlockRecord{X: x,
+			Y: y,
+			Z: z,
+			Block: types.Block{
+				ID:   id,
+				Meta: flagMeta & 0x0f,
+			},
+			Flags: (flagMeta >> 4) & 0x0f,
+		}
 	}
 }
 
@@ -642,7 +651,7 @@ func (i UpdateBlock) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
 	buf.WriteInt(uint32(len(i.BlockRecords)))
 	for _, record := range i.BlockRecords {
-		buf.BatchWrite(record.X, record.Z, record.Y, record.ID, (record.Flags<<4 | record.Meta))
+		buf.BatchWrite(record.X, record.Z, record.Y, record.Block.ID, (record.Flags<<4 | record.Block.Meta))
 	}
 	return buf
 }

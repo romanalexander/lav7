@@ -3,10 +3,12 @@ package command
 import (
 	"bufio"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/proto"
+	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 )
 
@@ -32,6 +34,21 @@ func HandleCommand() {
 				Y:        64,
 				Z:        3,
 			})
+		case "block":
+			br := make([]proto.BlockRecord, 20)
+			for i := 0; i < 20; i++ {
+				br[i] = proto.BlockRecord{
+					X:     0,
+					Y:     byte(i) + 55,
+					Z:     0,
+					Block: types.Block{ID: 4},
+				}
+			}
+			lav7.BroadcastPacket(&proto.UpdateBlock{
+				BlockRecords: br,
+			})
+		case "trace":
+			debug.PrintStack()
 		}
 	}
 }
