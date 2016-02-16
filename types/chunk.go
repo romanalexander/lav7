@@ -9,6 +9,8 @@ type ChunkDelivery struct {
 
 // Chunk contains block data for each MCPE level chunks.
 // Each chunk holds 16*16*128 blocks, and consumes at least 5200 bytes of memory.
+//
+// A zero value for Chunk is a valid value.
 type Chunk struct {
 	BlockData    [16 * 16 * 128]byte
 	MetaData     [16 * 16 * 64]byte // Nibbles
@@ -19,9 +21,6 @@ type Chunk struct {
 	mutex        *sync.RWMutex
 }
 
-func (c *Chunk) Init() {
-	c.mutex = new(sync.RWMutex)
-}
 // CopyFrom gets everything from given chunk, and writes to the chunk instance.
 // Mutex is not shared with given chunk. You don't need to RLock the copying chunk.
 func (c *Chunk) CopyFrom(chunk *Chunk) {

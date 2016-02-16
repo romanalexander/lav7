@@ -55,7 +55,6 @@ func (pv *Provider) GetChunk(cx, cz int32, create bool) (chk *types.Chunk) {
 			goto crt
 		}
 		chk = new(types.Chunk)
-		chk.Init()
 		buf := buffer.FromBytes(b)
 		chk.Mutex().Lock()
 		copy(chk.BlockData[:], buf.Read(16*16*128))

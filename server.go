@@ -28,18 +28,20 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 	p.Level = GetDefaultLevel()
 	p.EntityID = atomic.AddUint64(&LastEntityID, 1)
 	p.playerShown = make(map[uint64]struct{})
-	p.sentChunks = make(map[[2]int32]bool)
 
 	ch := make(chan *buffer.Buffer, 64)
 	p.recvChan = ch
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
-	p.callbackChan = make(chan PlayerCallback, 32)
+	p.callbackChan = make(chan PlayerCallback, 128)
 	p.updateTicker = time.NewTicker(time.Millisecond * 500)
+	p.chunkStop = make(chan struct{}, 1)
+	p.chunkRequest = make(chan [2]int32, 32)
 
 	iteratorLock.Lock()
 	Players[identifier] = p
 	iteratorLock.Unlock()
 	go p.process()
+	go p.updateChunk()
 	return ch
 }
 
@@ -50,6 +52,7 @@ func UnregisterPlayer(addr *net.UDPAddr) error {
 	if p, ok := Players[identifier]; ok {
 		iteratorLock.Unlock()
 		p.updateTicker.Stop()
+		p.chunkStop <- struct{}{}
 		AsPlayers(func(pl *Player) {
 			if p.EntityID == pl.EntityID {
 				return
@@ -59,7 +62,9 @@ func UnregisterPlayer(addr *net.UDPAddr) error {
 		iteratorLock.Lock()
 		delete(Players, identifier)
 		iteratorLock.Unlock()
-		Message(p.Username + " disconnected")
+		if p.loggedIn {
+			Message(p.Username + " disconnected")
+		}
 		return nil
 	}
 	iteratorLock.Unlock()
