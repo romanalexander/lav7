@@ -11,4 +11,11 @@ lav7 needs much more feature implementations, like level generator, or player mo
 Pull requests are always welcome, but please check these before writing pull request:
  - **Format your codes.** Unifying coding styles are important to collaborate. Please follow suggestions from `gofmt`, `golint`, `go vet` if you can.
   - Exception: You can omit documentation comment of exported items if it could be useless.
- - Other conditions will be written later
+
+## Installation
+ - Requirements: Latest Go installation
+  - Windows: [Download installation package from site](https://golang.org/dl/)
+  - Linux: Use `apt-get` or `yum`
+ - Add GOPATH and set PATH to GOPATH/bin
+ - To install or update, run `go get -u github.com/L7-MCPE/lav7/l7start && go install github.com/L7-MCPE/lav7/l7start`
+ - To run lav7, run `l7start`
