@@ -13,7 +13,6 @@ import (
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
-	"github.com/davecgh/go-spew/spew"
 )
 
 type PlayerCallback struct {
@@ -238,7 +237,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 				})
 			})
 		}
-		spew.Dump(pk)
+		//spew.Dump(pk)
 	default:
 		// log.Println("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented:")
 		// spew.Dump(pk)
