@@ -40,26 +40,27 @@ func (lv *Level) Provider() LevelProvider {
 // 4: West  (X-)
 // 5: East  (X+)
 func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (canceled bool) {
-	log.Println("OnTouch:", x, y, z, face)
+	px, py, pz := *x, *y, *z
 	switch face {
 	case 0:
-		*y--
+		py--
 	case 1:
-		*y++
+		py++
 	case 2:
-		*z--
+		pz--
 	case 3:
-		*z++
+		pz++
 	case 4:
-		*x--
+		px--
 	case 5:
-		*x++
+		px++
 	}
 	if f := lv.GetBlock(*x, *y, *z); f == 0 {
-		log.Printf("SetBlock %d %d %d %v", *x, *y, *z, item.Block())
 		lv.Set(*x, *y, *z, item.Block())
+		*x, *y, *z = px, py, pz
 	} else {
-		log.Println("Block", f)
+		log.Println("Block already exists:", f)
+		canceled = true
 	}
 	return
 }

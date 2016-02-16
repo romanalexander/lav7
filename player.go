@@ -161,24 +161,52 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 				return
 			}
 		}
+
 	case *Text:
 		pk := pk.(*Text)
 		if pk.TextType == TextTypeTranslation {
 			return
 		}
 		Message(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
+
 	case *MovePlayer:
 		pk := pk.(*MovePlayer)
 		// log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
 		p.updateMove(pk)
+
 	case *RemoveBlock:
 		pk := pk.(*RemoveBlock)
 		p.Level.SetBlock(int32(pk.X), int32(pk.Y), int32(pk.Z), 0) // Air
-		AsPlayers(func(pl *Player) {
-			if pl.EntityID == p.EntityID {
-				return
-			}
-			pl.SendPacket(&UpdateBlock{
+		p.BroadcastOthers(&UpdateBlock{
+			BlockRecords: []BlockRecord{
+				BlockRecord{
+					X:     uint32(pk.X),
+					Y:     byte(pk.Y),
+					Z:     uint32(pk.Z),
+					Block: types.Block{},
+				},
+			},
+		})
+
+	case *UseItem:
+		pk := pk.(*UseItem)
+		px, py, pz := int32(pk.X), int32(pk.Y), int32(pk.Z)
+		if !p.Level.OnUseItem(&px, &py, &pz, pk.Face, pk.Item) {
+			p.BroadcastOthers(&UpdateBlock{
+				BlockRecords: []BlockRecord{
+					BlockRecord{
+						X: uint32(px),
+						Y: byte(py),
+						Z: uint32(pz),
+						Block: types.Block{
+							ID:   byte(pk.Item.ID),
+							Meta: byte(pk.Item.Meta),
+						},
+					},
+				},
+			})
+		} else {
+			BroadcastPacket(&UpdateBlock{
 				BlockRecords: []BlockRecord{
 					BlockRecord{
 						X:     uint32(pk.X),
@@ -188,31 +216,14 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 					},
 				},
 			})
-		})
-	case *UseItem:
-		pk := pk.(*UseItem)
-		px, py, pz := int32(pk.X), int32(pk.Y), int32(pk.Z)
-		if !p.Level.OnUseItem(&px, &py, &pz, pk.Face, pk.Item) {
-			AsPlayers(func(pl *Player) {
-				if pl.EntityID == p.EntityID {
-					return
-				}
-				pl.SendPacket(&UpdateBlock{
-					BlockRecords: []BlockRecord{
-						BlockRecord{
-							X: uint32(px),
-							Y: byte(py),
-							Z: uint32(pz),
-							Block: types.Block{
-								ID:   byte(pk.Item.ID),
-								Meta: byte(pk.Item.Meta),
-							},
-						},
-					},
-				})
-			})
 		}
 		//spew.Dump(pk)
+
+	case *Animate:
+		pk := pk.(*Animate)
+		pk.EntityID = p.EntityID
+		p.BroadcastOthers(pk)
+
 	default:
 		// log.Println("0x" + hex.EncodeToString([]byte{pk.Pid()}) + "is unimplemented:")
 		// spew.Dump(pk)
@@ -228,7 +239,7 @@ func (p *Player) SendMessage(msg string) {
 	})
 }
 
-//NOTE: This function is NOT thread-safe. Only for internal use.
+//NOTE: This function is NOT goroutine-safe. Only for internal use.
 func (p *Player) sendChunk(chunkX, chunkZ int32, c *types.Chunk) {
 	c.Mutex().RLock()
 	i := &FullChunkData{
@@ -371,6 +382,15 @@ func (p *Player) disconnect(msg string) {
 	if ok {
 		s.Close(msg)
 	}
+}
+
+// BroadcastOthers broadcasts packet except player self.
+func (p *Player) BroadcastOthers(pk Packet) {
+	AsPlayers(func(pl *Player) {
+		if !pl.IsSelf(p) {
+			pl.SendPacket(pk)
+		}
+	})
 }
 
 // SendPacket sends given packet to client.
