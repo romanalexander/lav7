@@ -41,12 +41,6 @@ func GetSession(address *net.UDPAddr, sendChannel chan Packet,
 	sess.playerAdder = playerAdder
 	sess.playerRemover = playerRemover
 	go sess.work()
-	go func() {
-		<-sess.closed
-		SessionLock.Lock()
-		delete(Sessions, identifier)
-		SessionLock.Unlock()
-	}()
 	Sessions[identifier] = sess
 	return sess
 }
@@ -89,7 +83,7 @@ func (s *Session) Init(address *net.UDPAddr) {
 	s.Address = address
 	s.ReceivedChan = make(chan Packet, chanBufsize)
 	s.PlayerChan = make(chan *EncapsulatedPacket, chanBufsize)
-	s.closed = make(chan struct{})
+	s.closed = make(chan struct{}, 1)
 	s.updateTicker = time.NewTicker(time.Millisecond * 100)
 	s.timeout = time.NewTimer(time.Millisecond * 1500)
 	s.seqNumber = 1<<32 - 1
@@ -109,6 +103,10 @@ func (s *Session) Init(address *net.UDPAddr) {
 func (s *Session) work() {
 	for {
 		select {
+		case <-s.closed:
+			SessionLock.Lock()
+			delete(Sessions, s.Address.String())
+			SessionLock.Unlock()
 		case pk, ok := <-s.ReceivedChan:
 			if !ok {
 				return
@@ -341,9 +339,9 @@ func (s *Session) Close(reason string) {
 	s.sendEncapsulatedDirect(data)
 	s.updateTicker.Stop()
 	s.timeout.Stop()
-	close(s.ReceivedChan)
 	s.closed <- struct{}{}
 	s.playerRemover(s.Address)
+	close(s.packetChan)
 	blockLock.Lock()
 	defer blockLock.Unlock()
 	blockList[s.Address.String()] = time.Now().Add(time.Second + time.Millisecond*500)

@@ -28,7 +28,9 @@ func (pv *Provider) Init(gen func(int32, int32) *types.Chunk, name string) {
 }
 
 func (pv *Provider) ChunkExists(cx, cz int32) bool {
+	pv.ChunkMutex.Lock()
 	_, ok := pv.ChunkMap[[2]int32{cx, cz}]
+	pv.ChunkMutex.Unlock()
 	return ok
 }
 
@@ -69,8 +71,6 @@ func (pv *Provider) GetChunk(cx, cz int32, create bool) (chk *types.Chunk) {
 crt:
 	if create {
 		chk = pv.Generator(cx, cz)
-		chk.Mutex().Lock()
-		chk.Mutex().Unlock()
 		pv.ChunkMap[[2]int32{cx, cz}] = chk
 		return
 	}
@@ -99,7 +99,7 @@ func (pv *Provider) Save() error {
 			continue
 		}
 		buf := new(buffer.Buffer)
-		buf.BatchWrite(c.BiomeData[:], c.MetaData[:], c.LightData[:], c.SkyLightData[:], c.HeightMap[:], c.BiomeData[:])
+		buf.BatchWrite(c.BlockData[:], c.MetaData[:], c.LightData[:], c.SkyLightData[:], c.HeightMap[:], c.BiomeData[:])
 		if err := ioutil.WriteFile(path, buf.Done(), 0644); err != nil {
 			log.Println("Error while saving:", err)
 			continue

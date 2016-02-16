@@ -2,6 +2,13 @@ package types
 
 import "sync"
 
+type ChunkDelivery struct {
+	X, Z  int32
+	Chunk *Chunk
+}
+
+// Chunk contains block data for each MCPE level chunks.
+// Each chunk holds 16*16*128 blocks.
 type Chunk struct {
 	BlockData    [16 * 16 * 128]byte
 	MetaData     [16 * 16 * 64]byte // Nibbles
@@ -133,13 +140,10 @@ func (c *Chunk) Mutex() *sync.RWMutex {
 
 // FullChunkData returns full chunk payload for FullChunkDataPacket.
 func (c Chunk) FullChunkData() []byte {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
 	a := append(c.BlockData[:], c.MetaData[:]...)     // Block ID, Block MetaData
 	b := append(c.SkyLightData[:], c.LightData[:]...) // SkyLight, Light
 	c_ := append(c.HeightMap[:], c.BiomeData[:]...)   // Height Map, Biome colors
 	d := []byte{0, 0, 0, 0}                           // Extra data: length 0
 	// No tile entity NBT fields
-	e := append(a, append(b, append(c_, d...)...)...) // Seems dirty :\
-	return e
+	return append(a, append(b, append(c_, d...)...)...) // Seems dirty :\
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/lav7/proto"
@@ -21,16 +22,20 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 		fmt.Println("Duplicate authentication from", addr)
 		Players[identifier].disconnect("Logged in from another location")
 	}
+
 	p := new(Player)
 	p.Address = addr
 	p.Level = GetDefaultLevel()
 	p.EntityID = atomic.AddUint64(&LastEntityID, 1)
 	p.playerShown = make(map[uint64]struct{})
 	p.sentChunks = make(map[[2]int32]bool)
+
 	ch := make(chan *buffer.Buffer, 64)
 	p.recvChan = ch
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
-	p.callbackChan = make(chan func(*Player), 32)
+	p.callbackChan = make(chan PlayerCallback, 32)
+	p.updateTicker = time.NewTicker(time.Millisecond * 500)
+
 	iteratorLock.Lock()
 	Players[identifier] = p
 	iteratorLock.Unlock()
@@ -44,7 +49,7 @@ func UnregisterPlayer(addr *net.UDPAddr) error {
 	iteratorLock.Lock()
 	if p, ok := Players[identifier]; ok {
 		iteratorLock.Unlock()
-		close(p.recvChan)
+		p.updateTicker.Stop()
 		AsPlayers(func(pl *Player) {
 			if p.EntityID == pl.EntityID {
 				return
@@ -106,7 +111,7 @@ func AsPlayersError(callback func(*Player) error) error {
 }
 
 // BroadcastCallback is same as AsPlayers(RunAs())
-func BroadcastCallback(callback func(*Player)) {
+func BroadcastCallback(callback PlayerCallback) {
 	AsPlayers(func(p *Player) {
 		p.RunAs(callback)
 	})

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/L7-MCPE/lav7/level"
 	. "github.com/L7-MCPE/lav7/proto"
@@ -13,6 +15,11 @@ import (
 	"github.com/L7-MCPE/lav7/util/buffer"
 	"github.com/davecgh/go-spew/spew"
 )
+
+type PlayerCallback struct {
+	Call func(*Player, interface{})
+	Arg  interface{}
+}
 
 // Player is a struct for handling/containing MCPE client specific things.
 type Player struct {
@@ -31,16 +38,21 @@ type Player struct {
 
 	playerShown map[uint64]struct{} // FIXME: Data races
 	sentChunks  map[[2]int32]bool
+	chunkBusy   bool
+	chunkDone   chan struct{}
 
 	recvChan     chan *buffer.Buffer
 	raknetChan   chan<- *raknet.EncapsulatedPacket
-	callbackChan chan func(*Player)
-	loggedIn     bool
-	spawned      bool
-	closed       bool
+	callbackChan chan PlayerCallback
+	updateTicker *time.Ticker
+
+	loggedIn bool
+	spawned  bool
+	closed   bool
 }
 
 func (p *Player) process() {
+	var chunkUpdateDone <-chan struct{}
 	for {
 		select {
 		case buf, ok := <-p.recvChan:
@@ -49,9 +61,62 @@ func (p *Player) process() {
 			}
 			p.HandlePacket(buf)
 		case callback := <-p.callbackChan:
-			callback(p)
+			callback.Call(p, callback.Arg)
+		case <-p.updateTicker.C:
+			if !p.chunkBusy {
+				p.chunkBusy = true
+				//chunkUpdateDone = p.updateChunk()
+			}
+		case <-chunkUpdateDone:
+			p.chunkBusy = false
 		}
 	}
+}
+
+func (p *Player) updateChunk() <-chan struct{} { // Should be run on player goroutine
+	radius := int32(3)
+	chunkChan := make(chan types.ChunkDelivery, (radius*2+1)*(radius*2+1))
+	px, pz := int32(p.Position.X), int32(p.Position.Y)
+
+	ch := make(chan struct{})
+	wg := new(sync.WaitGroup)
+
+	go func() {
+		for x := px - radius; x <= px+radius; x++ {
+			for z := pz - radius; z <= pz+radius; z++ {
+				tx, tz := x, z
+				wg.Add(1)
+				p.RunAs(PlayerCallback{
+					Call: func(pl *Player, arg interface{}) {
+						if _, ok := pl.sentChunks[[2]int32{tx, tz}]; !ok {
+							chunkChan <- types.ChunkDelivery{
+								X:     tx,
+								Z:     tz,
+								Chunk: pl.Level.GetChunk(tx, tz, true),
+							}
+						}
+						wg.Done()
+					},
+				})
+			}
+		}
+		wg.Wait()
+		close(chunkChan)
+	}()
+
+	go func() {
+		for s := range chunkChan {
+			p.RunAs(PlayerCallback{
+				Call: func(pl *Player, arg interface{}) {
+					s := arg.(types.ChunkDelivery)
+					pl.SendChunk(s.X, s.Z, s.Chunk)
+				},
+				Arg: s,
+			})
+		}
+		ch <- struct{}{}
+	}()
+	return ch
 }
 
 // HandlePacket handles received MCPE packet after raknet connection is established.
@@ -113,31 +178,18 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		})
 
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
-		xRadius := int32(2)
-		zRadius := int32(2)
-		chunkChan := make(chan struct {
-			x, z int32
-			c    *types.Chunk
-		}, (xRadius*2+1)*(zRadius*2+1))
-		go func() {
-			for x := -xRadius; x <= xRadius; x++ {
-				for z := -zRadius; z <= zRadius; z++ {
-					chunkChan <- struct {
-						x, z int32
-						c    *types.Chunk
-					}{x, z, p.Level.GetChunk(x, z, true)}
-				}
-			}
-		}()
-		go func() {
-			for chunks := (xRadius*2 + 1) * (zRadius*2 + 1); chunks > 0; chunks-- {
-				s := <-chunkChan
-				p.SendChunk(s.x, s.z, s.c)
-			}
-			p.firstSpawn()
-			log.Println(p.Username + " joined the game")
-			p.SendMessage("Hello, this is lav7 test server!")
-		}()
+		p.chunkBusy = true
+		go func(ch <-chan struct{}) {
+			<-ch
+			p.RunAs(PlayerCallback{
+				Call: func(pl *Player, arg interface{}) {
+					pl.chunkBusy = false
+					pl.firstSpawn()
+					log.Println(pl.Username + " joined the game")
+					pl.SendMessage("Hello, this is lav7 test server!")
+				},
+			})
+		}(p.updateChunk())
 	case *Batch:
 		pk := pk.(*Batch)
 		for _, pp := range pk.Payloads {
@@ -207,12 +259,14 @@ func (p *Player) SendChunk(chunkX, chunkZ int32, c *types.Chunk) {
 	if _, exists := p.sentChunks[[2]int32{chunkX, chunkZ}]; exists {
 		return
 	}
+	c.Mutex().RLock()
 	i := &FullChunkData{
 		ChunkX:  uint32(chunkX),
 		ChunkZ:  uint32(chunkZ),
 		Order:   1,
 		Payload: c.FullChunkData(),
 	}
+	c.Mutex().RUnlock()
 	p.SendCompressed(i)
 	p.sentChunks[[2]int32{chunkX, chunkZ}] = true
 }
@@ -265,20 +319,22 @@ func (p *Player) updateMove(pk *MovePlayer) {
 	p.Position.X, p.Position.Y, p.Position.Z = pk.X, pk.Y, pk.Z
 	p.Yaw, p.BodyYaw, p.Pitch = pk.Yaw, pk.BodyYaw, pk.Pitch
 	pk.EntityID = p.EntityID
-	BroadcastCallback(func(pl *Player) {
-		if pl.IsVisible(p) {
-			pl.SendPacket(&MoveEntity{
-				EntityIDs: []uint64{p.EntityID},
-				EntityPos: [][6]float32{[6]float32{
-					pk.X,
-					pk.Y,
-					pk.Z,
-					pk.BodyYaw,
-					pk.Yaw,
-					pk.Pitch,
-				}},
-			})
-		}
+	go BroadcastCallback(PlayerCallback{
+		Call: func(pl *Player, arg interface{}) {
+			if pl.IsVisible(p) {
+				pl.SendPacket(&MoveEntity{
+					EntityIDs: []uint64{p.EntityID},
+					EntityPos: [][6]float32{[6]float32{
+						pk.X,
+						pk.Y,
+						pk.Z,
+						pk.BodyYaw,
+						pk.Yaw,
+						pk.Pitch,
+					}},
+				})
+			}
+		},
 	})
 }
 
@@ -286,8 +342,10 @@ func (p *Player) firstSpawn() {
 	if p.spawned {
 		return
 	}
-	BroadcastCallback(func(player *Player) {
-		player.ShowPlayer(p)
+	BroadcastCallback(PlayerCallback{
+		Call: func(player *Player, arg interface{}) {
+			player.ShowPlayer(p)
+		},
 	})
 	pk := &PlayStatus{
 		Status: PlayerSpawn,
@@ -333,7 +391,7 @@ func (p *Player) SendCompressed(pks ...Packet) {
 
 // RunAs runs given callback on the player's goroutine.
 // You should use this if you need access to other players' fields.
-func (p *Player) RunAs(callback func(*Player)) {
+func (p *Player) RunAs(callback PlayerCallback) {
 	p.callbackChan <- callback
 }
 

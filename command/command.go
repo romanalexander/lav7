@@ -51,8 +51,8 @@ func HandleCommand() {
 				BlockRecords: br,
 			})
 		case "trace":
-			b := make([]byte, 4096)
-			n := runtime.Stack(b, true)
+			var b [1024 * 1024 * 32]byte
+			n := runtime.Stack(b[:], true)
 			fmt.Println(string(b[:n]))
 		case "gc":
 			debug.FreeOSMemory()

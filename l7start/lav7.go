@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	_ "net/http/pprof"
 	"runtime"
 	"sync"
@@ -17,17 +16,18 @@ import (
 )
 
 func main() {
-	go http.ListenAndServe(":8080", nil)
+	//go http.ListenAndServe(":8080", nil)
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	p := new(dummy.Provider)
 	p.Init(new(gen.SampleGenerator).Gen, lav7.GetDefaultLevel().Name)
 	lav7.GetDefaultLevel().Init(p)
 	log.Println("Generating chunks")
+	genRadius := int32(5)
 	wg := new(sync.WaitGroup)
-	wg.Add(25)
+	wg.Add(int((genRadius*2 + 1) * (genRadius*2 + 1)))
 	start := time.Now()
-	for x := int32(-2); x <= 2; x++ {
-		for z := int32(-2); z <= 2; z++ {
+	for x := -genRadius; x <= genRadius; x++ {
+		for z := -genRadius; z <= genRadius; z++ {
 			go func(x, z int32) { lav7.GetDefaultLevel().GetChunk(x, z, true); wg.Done() }(x, z)
 		}
 	}
