@@ -107,10 +107,8 @@ func (s *Session) work() {
 			SessionLock.Lock()
 			delete(Sessions, s.Address.String())
 			SessionLock.Unlock()
-		case pk, ok := <-s.ReceivedChan:
-			if !ok {
-				return
-			}
+			return
+		case pk := <-s.ReceivedChan:
 			s.handlePacket(pk)
 		case ep := <-s.PlayerChan:
 			s.SendEncapsulated(ep)
