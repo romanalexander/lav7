@@ -52,6 +52,8 @@ func HandleCommand() {
 			b := make([]byte, 4096)
 			n := runtime.Stack(b, true)
 			fmt.Println(string(b[:n]))
+		case "gc":
+			runtime.GC()
 		}
 	}
 }

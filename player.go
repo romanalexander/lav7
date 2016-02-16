@@ -125,7 +125,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 					chunkChan <- struct {
 						x, z int32
 						c    *types.Chunk
-					}{x, z, p.Level.Provider().GetChunk(x, z, true)}
+					}{x, z, p.Level.GetChunk(x, z, true)}
 				}
 			}
 		}()

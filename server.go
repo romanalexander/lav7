@@ -165,7 +165,7 @@ func Stop(reason string) {
 	fmt.Println("Stopping server: " + reason)
 	AsPlayers(func(p *Player) { p.Kick("Server stop: " + reason) })
 	for _, l := range levels {
-		l.Provider().Save("Dummy")
+		l.Save("Dummy")
 	}
 	os.Exit(0)
 }

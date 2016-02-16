@@ -16,15 +16,15 @@ const (
 )
 
 type Level struct {
-	provider LevelProvider
+	LevelProvider
 }
 
 func (lv *Level) Init(pv LevelProvider) {
-	lv.provider = pv
+	lv.LevelProvider = pv
 }
 
 func (lv *Level) Provider() LevelProvider {
-	return lv.provider
+	return lv.LevelProvider
 }
 
 // OnUseItem handles UseItemPacket and determines position to update block position.
@@ -64,45 +64,45 @@ func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (cancele
 }
 
 func (lv Level) GetBlock(x, y, z int32) byte {
-	c := lv.Provider().GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4, true)
 	c.Mutex().RLock()
 	defer c.Mutex().RUnlock()
 	return c.GetBlock(byte(x&0xf), byte(y), byte(z&0xf))
 }
 
 func (lv *Level) SetBlock(x, y, z int32, b byte) {
-	c := lv.Provider().GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4, true)
 	c.Mutex().Lock()
 	defer c.Mutex().Unlock()
-	c.SetBlock(byte(x&0x0f), byte(y), byte(z&0x0f), b)
+	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), b)
 }
 
 func (lv Level) GetBlockMeta(x, y, z int32) byte {
-	c := lv.Provider().GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4, true)
 	c.Mutex().RLock()
 	defer c.Mutex().RUnlock()
 	return c.GetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf))
 }
 
 func (lv *Level) SetBlockMeta(x, y, z int32, b byte) {
-	c := lv.Provider().GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4, true)
 	c.Mutex().Lock()
 	defer c.Mutex().Unlock()
-	c.SetBlockMeta(byte(x&0x0f), byte(y), byte(z&0x0f), b)
+	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), b)
 }
 
 func (lv Level) Get(x, y, z int32) *types.Block {
-	c := lv.Provider().GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4, true)
 	return &types.Block{
-		ID:   c.GetBlock(byte(x&0xf), byte(y&0xf), byte(z&0xf)),
-		Meta: c.GetBlockMeta(byte(x&0xf), byte(y&0xf), byte(z&0xf)),
+		ID:   c.GetBlock(byte(x&0xf), byte(y), byte(z&0xf)),
+		Meta: c.GetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf)),
 	}
 }
 
 func (lv Level) Set(x, y, z int32, block *types.Block) {
-	c := lv.Provider().GetChunk(x>>4, z>>4, true)
-	c.SetBlock(byte(x&0xf), byte(y&0xf), byte(z&0xf), block.ID)
-	c.SetBlockMeta(byte(x&0xf), byte(y&0xf), byte(z&0xf), block.Meta)
+	c := lv.GetChunk(x>>4, z>>4, true)
+	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), block.ID)
+	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), block.Meta)
 }
 
 func (lv Level) GetTime() uint16 {
