@@ -27,6 +27,6 @@ var MaxPlayers = 20
 var LastEntityID uint64
 
 var levels = map[string]*level.Level{
-	defaultLvl: new(level.Level),
+	defaultLvl: &level.Level{Name: "dummy"},
 }
 var defaultLvl = "default"

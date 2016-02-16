@@ -20,10 +20,11 @@ type Provider struct {
 	Generator  func(int32, int32) *types.Chunk
 }
 
-func (pv *Provider) Init(gen func(int32, int32) *types.Chunk) {
+func (pv *Provider) Init(gen func(int32, int32) *types.Chunk, name string) {
 	pv.ChunkMap = make(map[[2]int32]*types.Chunk)
 	pv.ChunkMutex = new(sync.Mutex)
 	pv.Generator = gen
+	pv.Name = name
 }
 
 func (pv *Provider) ChunkExists(cx, cz int32) bool {
@@ -54,13 +55,22 @@ func (pv *Provider) GetChunk(cx, cz int32, create bool) (chk *types.Chunk) {
 		chk = new(types.Chunk)
 		chk.Init()
 		buf := buffer.FromBytes(b)
-		chk.Read(buf)
+		chk.Mutex().Lock()
+		copy(chk.BlockData[:], buf.Read(16*16*128))
+		copy(chk.MetaData[:], buf.Read(16*16*64))
+		copy(chk.LightData[:], buf.Read(16*16*64))
+		copy(chk.SkyLightData[:], buf.Read(16*16*64))
+		copy(chk.HeightMap[:], buf.Read(16*16))
+		copy(chk.BiomeData[:], buf.Read(16*16*4))
+		chk.Mutex().Unlock()
 		pv.ChunkMap[[2]int32{cx, cz}] = chk
 		return
 	}
 crt:
 	if create {
 		chk = pv.Generator(cx, cz)
+		chk.Mutex().Lock()
+		chk.Mutex().Unlock()
 		pv.ChunkMap[[2]int32{cx, cz}] = chk
 		return
 	}
@@ -79,19 +89,17 @@ func (pv *Provider) SetChunk(cx, cz int32, force bool, c *types.Chunk) {
 	pv.ChunkMap[[2]int32{cx, cz}] = c
 }
 
-func (pv *Provider) Save(name string) error {
+func (pv *Provider) Save() error {
 	pv.ChunkMutex.Lock()
 	defer pv.ChunkMutex.Unlock()
 	for k, c := range pv.ChunkMap {
-		path, _ := filepath.Abs("levels/" + name + "/" + strconv.Itoa(int(k[0])) + "_" + strconv.Itoa(int(k[1])) + ".raw")
+		path, _ := filepath.Abs("levels/" + pv.Name + "/" + strconv.Itoa(int(k[0])) + "_" + strconv.Itoa(int(k[1])) + ".raw")
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			log.Println("Error while creating dir:", err)
-		}
-		buf, err := c.Write()
-		if err != nil {
-			log.Println("Error while writing chunk to file:", err)
 			continue
 		}
+		buf := new(buffer.Buffer)
+		buf.BatchWrite(c.BiomeData[:], c.MetaData[:], c.LightData[:], c.SkyLightData[:], c.HeightMap[:], c.BiomeData[:])
 		if err := ioutil.WriteFile(path, buf.Done(), 0644); err != nil {
 			log.Println("Error while saving:", err)
 			continue

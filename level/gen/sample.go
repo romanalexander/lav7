@@ -14,7 +14,8 @@ func (s SampleGenerator) Gen(x, z int32) (chunk *types.Chunk) {
 			for y := byte(0); y < 60; y++ {
 				chunk.SetBlock(x, y, z, 3)
 			}
-			chunk.SetBlock(x, 61, z, 2)
+			chunk.SetBlock(x, 60, z, 2)
+			chunk.SetBiomeColor(x, z, x*16, x*z, z*16)
 		}
 	}
 	chunk.PopulateHeight()

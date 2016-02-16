@@ -3,8 +3,10 @@ package command
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strings"
 
 	"github.com/L7-MCPE/lav7"
@@ -53,7 +55,8 @@ func HandleCommand() {
 			n := runtime.Stack(b, true)
 			fmt.Println(string(b[:n]))
 		case "gc":
-			runtime.GC()
+			debug.FreeOSMemory()
+			log.Println("Done")
 		}
 	}
 }

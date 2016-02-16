@@ -17,6 +17,7 @@ const (
 
 type Level struct {
 	LevelProvider
+	Name string
 }
 
 func (lv *Level) Init(pv LevelProvider) {
@@ -110,7 +111,3 @@ func (lv Level) GetTime() uint16 {
 }
 
 func (lv Level) SetTime(t uint16) {}
-
-func (lv Level) GetName() string {
-	return "Dummy"
-}
