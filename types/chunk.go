@@ -8,7 +8,7 @@ type ChunkDelivery struct {
 }
 
 // Chunk contains block data for each MCPE level chunks.
-// Each chunk holds 16*16*128 blocks.
+// Each chunk holds 16*16*128 blocks, and consumes at least 5200 bytes of memory.
 type Chunk struct {
 	BlockData    [16 * 16 * 128]byte
 	MetaData     [16 * 16 * 64]byte // Nibbles
@@ -22,18 +22,30 @@ type Chunk struct {
 func (c *Chunk) Init() {
 	c.mutex = new(sync.RWMutex)
 }
+// CopyFrom gets everything from given chunk, and writes to the chunk instance.
+// Mutex is not shared with given chunk. You don't need to RLock the copying chunk.
+func (c *Chunk) CopyFrom(chunk *Chunk) {
+	chunk.Mutex().RLock()
+	defer chunk.Mutex().RUnlock()
+	copy(c.BlockData[:], chunk.BlockData[:])
+	copy(c.MetaData[:], chunk.MetaData[:])
+	copy(c.LightData[:], chunk.LightData[:])
+	copy(c.SkyLightData[:], chunk.SkyLightData[:])
+	copy(c.HeightMap[:], chunk.HeightMap[:])
+	copy(c.BiomeData[:], chunk.BiomeData[:])
+}
 
-// GetBlock implements level.Chunk interface.
+// GetBlock returns block ID at given coordinates.
 func (c Chunk) GetBlock(x, y, z byte) byte {
 	return c.BlockData[uint16(y)<<8|uint16(z)<<4|uint16(x)]
 }
 
-// SetBlock implements level.Chunk interface.
+// SetBlock sets block ID at given coordinates.
 func (c *Chunk) SetBlock(x, y, z, id byte) {
 	c.BlockData[uint16(y)<<8|uint16(z)<<4|uint16(x)] = id
 }
 
-// GetBlockMeta implements level.Chunk interface.
+// GetBlockMeta returns block meta at given coordinates.
 func (c Chunk) GetBlockMeta(x, y, z byte) byte {
 	if x&1 == 0 {
 		return c.MetaData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1] & 0x0f
@@ -41,7 +53,7 @@ func (c Chunk) GetBlockMeta(x, y, z byte) byte {
 	return c.MetaData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1] >> 4
 }
 
-// SetBlockMeta implements level.Chunk interface.
+// SetBlockMeta sets block meta at given coordinates.
 func (c *Chunk) SetBlockMeta(x, y, z, id byte) {
 	b := c.MetaData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1]
 	if x&1 == 0 {
@@ -51,7 +63,7 @@ func (c *Chunk) SetBlockMeta(x, y, z, id byte) {
 	}
 }
 
-// GetBlockLight implements level.Chunk interface.
+// GetBlockLight returns block light level at given coordinates.
 func (c Chunk) GetBlockLight(x, y, z byte) byte {
 	if x&1 == 0 {
 		return c.LightData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1] & 0x0f
@@ -59,7 +71,7 @@ func (c Chunk) GetBlockLight(x, y, z byte) byte {
 	return c.LightData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1] >> 4
 }
 
-// SetBlockLight implements level.Chunk interface.
+// SetBlockLight sets block light level at given coordinates.
 func (c *Chunk) SetBlockLight(x, y, z, id byte) {
 	b := c.LightData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1]
 	if x&1 == 0 {
@@ -69,7 +81,7 @@ func (c *Chunk) SetBlockLight(x, y, z, id byte) {
 	}
 }
 
-// GetBlockSkyLight implements level.Chunk interface.
+// GetBlockSkyLight returns sky light level at given coordinates.
 func (c Chunk) GetBlockSkyLight(x, y, z byte) byte {
 	if x&1 == 0 {
 		return c.SkyLightData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1] & 0x0f
@@ -77,7 +89,7 @@ func (c Chunk) GetBlockSkyLight(x, y, z byte) byte {
 	return c.SkyLightData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1] >> 4
 }
 
-// SetBlockSkyLight implements level.Chunk interface.
+// SetBlockSkyLight sets sky light level at given coordinates.
 func (c *Chunk) SetBlockSkyLight(x, y, z, id byte) {
 	b := c.SkyLightData[uint16(y)<<7|uint16(z)<<3|uint16(x)>>1]
 	if x&1 == 0 {
@@ -87,39 +99,39 @@ func (c *Chunk) SetBlockSkyLight(x, y, z, id byte) {
 	}
 }
 
-// GetHeightMap implements level.Chunk interface.
+// GetHeightMap returns highest block height on given X-Z coordinates.
 func (c Chunk) GetHeightMap(x, z byte) byte {
 	return c.HeightMap[uint16(z)<<4|uint16(x)]
 }
 
-// SetHeightMap implements level.Chunk interface.
+// GetHeightMap saves highest block height on given X-Z coordinates.
 func (c *Chunk) SetHeightMap(x, z, h byte) {
 	c.HeightMap[uint16(z)<<4|uint16(x)] = h
 }
 
-// GetBiomeID implements level.Chunk interface.
+// GetBiomeID returns biome ID on given X-Z coordinates.
 func (c Chunk) GetBiomeID(x, z byte) byte {
 	return c.BiomeData[uint16(z)<<6|uint16(x)<<2]
 }
 
-// SetBiomeID implements level.Chunk interface.
+// SetBiomeID sets biome ID on given X-Z coordinates.
 func (c *Chunk) SetBiomeID(x, z, id byte) {
 	c.BiomeData[uint16(z)<<6|uint16(x)<<2] = id
 }
 
-// GetBiomeColor implements level.Chunk interface.
+// GetBiomeColor returns biome color on given X-Z coordinates.
 func (c Chunk) GetBiomeColor(x, z byte) (r, g, b byte) {
 	rgb := c.BiomeData[uint16(z)<<6|uint16(x)<<2+1 : uint16(z)<<6|uint16(x)<<2+4]
 	return rgb[0], rgb[1], rgb[2]
 }
 
-// SetBiomeColor implements level.Chunk interface.
+// SetBiomeColor sets biome color on given X-Z coordinates.
 func (c *Chunk) SetBiomeColor(x, z, r, g, b byte) {
 	offset := uint16(z)<<6 | uint16(x)<<2
 	c.BiomeData[offset+1], c.BiomeData[offset+2], c.BiomeData[offset+3] = r, g, b
 }
 
-// PopulateHeight implements level.Chunk interface.
+// PopulateHeight populates chunk's block height map.
 func (c *Chunk) PopulateHeight() {
 	for x := byte(0); x < 16; x++ {
 		for z := byte(0); z < 16; z++ {
@@ -133,12 +145,15 @@ func (c *Chunk) PopulateHeight() {
 	}
 }
 
-// Mutex implements level.Chunk interface.
+// Mutex returns chunk's RW mutex.
 func (c *Chunk) Mutex() *sync.RWMutex {
+	if c.mutex == nil {
+		c.mutex = new(sync.RWMutex)
+	}
 	return c.mutex
 }
 
-// FullChunkData returns full chunk payload for FullChunkDataPacket.
+// FullChunkData returns full chunk payload for FullChunkDataPacket. Order is layered.
 func (c Chunk) FullChunkData() []byte {
 	a := append(c.BlockData[:], c.MetaData[:]...)     // Block ID, Block MetaData
 	b := append(c.SkyLightData[:], c.LightData[:]...) // SkyLight, Light
