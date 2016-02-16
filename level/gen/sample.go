@@ -2,11 +2,12 @@ package gen
 
 import "github.com/L7-MCPE/lav7/types"
 
-type SampleGenerator struct{}
+type SampleGenerator struct {
+	Cache *types.Chunk
+}
 
-func (s SampleGenerator) Gen(x, z int32) (chunk *types.Chunk) {
-	chunk = new(types.Chunk)
-	chunk.Init()
+func (s *SampleGenerator) Init() {
+	chunk := new(types.Chunk)
 	for x := byte(0); x < 16; x++ {
 		for z := byte(0); z < 16; z++ {
 			for y := byte(0); y < 60; y++ {
@@ -17,5 +18,11 @@ func (s SampleGenerator) Gen(x, z int32) (chunk *types.Chunk) {
 		}
 	}
 	chunk.PopulateHeight()
-	return
+	s.Cache = chunk
+}
+
+func (s *SampleGenerator) Gen(x, z int32) *types.Chunk {
+	chunk := new(types.Chunk)
+	chunk.CopyFrom(s.Cache)
+	return chunk
 }

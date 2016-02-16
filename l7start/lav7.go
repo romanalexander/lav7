@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	_ "net/http/pprof"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -17,22 +18,27 @@ import (
 
 func main() {
 	//go http.ListenAndServe(":8080", nil)
+	start := time.Now()
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	g := new(gen.SampleGenerator)
+	log.Println("Generator type:", reflect.TypeOf(g))
+	g.Init()
+	log.Println("Generator init done. Initializing level...")
 	p := new(dummy.Provider)
-	p.Init(new(gen.SampleGenerator).Gen, lav7.GetDefaultLevel().Name)
+	p.Init(g.Gen, lav7.GetDefaultLevel().Name)
 	lav7.GetDefaultLevel().Init(p)
-	log.Println("Generating chunks")
 	genRadius := int32(5)
+	log.Printf("Level init done. Preparing chunks(initial radius: %d)", genRadius)
 	wg := new(sync.WaitGroup)
 	wg.Add(int((genRadius*2 + 1) * (genRadius*2 + 1)))
-	start := time.Now()
 	for x := -genRadius; x <= genRadius; x++ {
 		for z := -genRadius; z <= genRadius; z++ {
 			go func(x, z int32) { lav7.GetDefaultLevel().GetChunk(x, z, true); wg.Done() }(x, z)
 		}
 	}
 	wg.Wait()
-	log.Println("Elapsed time:", time.Since(start).Seconds(), "seconds")
+	log.Println("All done! Elapsed time:", time.Since(start).Seconds(), "seconds")
+	log.Println("Starting raknet router...")
 	var r *raknet.Router
 	var err error
 	if r, err = raknet.CreateRouter(lav7.RegisterPlayer, lav7.UnregisterPlayer, 19132); err != nil {
@@ -40,5 +46,6 @@ func main() {
 		return
 	}
 	r.Start()
+	log.Println("Server is ready.")
 	command.HandleCommand()
 }
