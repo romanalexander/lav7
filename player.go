@@ -272,6 +272,7 @@ func (p *Player) HidePlayer(player *Player) {
 		EntityID: player.EntityID,
 		RawUUID:  player.UUID,
 	})
+	delete(p.playerShown, player.EntityID)
 }
 
 // IsVisible determines if the player can see given player struct
@@ -288,7 +289,7 @@ func (p *Player) IsSelf(player *Player) bool {
 func (p *Player) updateMove(pk *MovePlayer) {
 	p.Position.X, p.Position.Y, p.Position.Z = pk.X, pk.Y, pk.Z
 	p.Yaw, p.BodyYaw, p.Pitch = pk.Yaw, pk.BodyYaw, pk.Pitch
-	pk.EntityID = p.EntityID
+
 	go BroadcastCallback(PlayerCallback{
 		Call: func(pl *Player, arg interface{}) {
 			if pl.IsVisible(p) {
@@ -312,20 +313,43 @@ func (p *Player) firstSpawn() {
 	if p.spawned {
 		return
 	}
+
 	BroadcastCallback(PlayerCallback{
 		Call: func(player *Player, arg interface{}) {
 			player.ShowPlayer(p)
+			player.SendPacket(&PlayerList{
+				Type: PlayerListAdd,
+				PlayerEntries: []PlayerListEntry{PlayerListEntry{
+					RawUUID:  p.UUID,
+					EntityID: p.EntityID,
+					Username: p.Username,
+					SkinName: p.SkinName,
+					Skin:     p.Skin,
+				}},
+			})
 		},
 	})
+
+	entries := make([]PlayerListEntry, 0)
 	AsPlayers(func(pl *Player) {
-		if !p.IsSelf(pl) {
-			p.ShowPlayer(pl)
-		}
+		p.ShowPlayer(pl)
+		entries = append(entries, PlayerListEntry{
+			RawUUID:  pl.UUID,
+			EntityID: pl.EntityID,
+			Username: pl.Username,
+			SkinName: pl.SkinName,
+			Skin:     pl.Skin,
+		})
 	})
-	pk := &PlayStatus{
+
+	p.SendPacket(&PlayerList{
+		Type:          PlayerListAdd,
+		PlayerEntries: entries,
+	})
+	p.SendPacket(&PlayStatus{
 		Status: PlayerSpawn,
-	}
-	p.SendPacket(pk)
+	})
+
 	SpawnPlayer(p)
 	p.spawned = true
 	Message(p.Username + " joined")
@@ -337,13 +361,16 @@ func (p *Player) Kick(reason string) {
 }
 
 func (p *Player) disconnect(msg string) {
-	buf := buffer.FromBytes([]byte{0x91})
-	buf.WriteString(msg)
-	p.send(buf)
+	p.SendDirect(&Disconnect{
+		Message: msg,
+	})
+
 	raknet.SessionLock.Lock()
-	s := raknet.Sessions[p.Address.String()]
+	s, ok := raknet.Sessions[p.Address.String()]
 	raknet.SessionLock.Unlock()
-	s.Close("disconnected from server: " + msg)
+	if ok {
+		s.Close(msg)
+	}
 }
 
 // SendPacket sends given packet to client.
@@ -351,6 +378,25 @@ func (p *Player) SendPacket(pk Packet) {
 	buf := buffer.FromBytes([]byte{0x8e, pk.Pid()})
 	buf.Write(pk.Write().Done())
 	p.send(buf)
+}
+
+// SendDirect sends given packet without passing to raknetChan channel.
+func (p *Player) SendDirect(pk Packet) {
+	buf := buffer.FromBytes([]byte{0x8e, pk.Pid()})
+	buf.Write(pk.Write().Done())
+
+	ep := new(raknet.EncapsulatedPacket)
+	ep.Reliability = 2
+	ep.Buffer = buf
+	ep.Buffer.Offset = 0
+
+	raknet.SessionLock.Lock()
+	s, ok := raknet.Sessions[p.Address.String()]
+	raknet.SessionLock.Unlock()
+
+	if ok {
+		s.SendEncapsulated(ep)
+	}
 }
 
 // SendCompressed sends packed BatchPacket with given packets.

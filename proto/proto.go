@@ -1471,13 +1471,13 @@ func (i SetPlayerGametype) Write() *buffer.Buffer {
 type PlayerListEntry struct {
 	RawUUID            [16]byte
 	EntityID           uint64
-	Username, Slimness string
+	Username, SkinName string
 	Skin               []byte
 }
 
 const (
-	PlayerListRemove byte = 0
-	PlayerListAdd    byte = 1
+	PlayerListRemove byte = 0 // UUID only
+	PlayerListAdd    byte = 1 // Everything!
 )
 
 type PlayerList struct {
@@ -1500,7 +1500,7 @@ func (i *PlayerList) Read(buf *buffer.Buffer) {
 		}
 		entry.EntityID = buf.ReadLong()
 		entry.Username = buf.ReadString()
-		entry.Slimness = buf.ReadString()
+		entry.SkinName = buf.ReadString()
 		entry.Skin = []byte(buf.ReadString())
 		i.PlayerEntries[k] = entry
 	}
@@ -1517,7 +1517,7 @@ func (i PlayerList) Write() *buffer.Buffer {
 		}
 		buf.WriteLong(entry.EntityID)
 		buf.WriteString(entry.Username)
-		buf.WriteString(entry.Slimness)
+		buf.WriteString(entry.SkinName)
 		buf.WriteString(string(entry.Skin))
 	}
 	return buf

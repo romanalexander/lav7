@@ -17,5 +17,5 @@ Pull requests are always welcome, but please check these before writing pull req
   - Windows: [Download installation package from site](https://golang.org/dl/)
   - Linux: Use `apt-get` or `yum`
  - Add GOPATH and set PATH to GOPATH/bin
- - To install or update, run `go get -u github.com/L7-MCPE/lav7/l7start && go install github.com/L7-MCPE/lav7/l7start`
+ - To install or update lav7, run `go get -u github.com/L7-MCPE/lav7/l7start && go install github.com/L7-MCPE/lav7/l7start`
  - To run lav7, run `l7start`
