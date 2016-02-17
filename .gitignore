@@ -1,3 +1,4 @@
 levels/
 __pycache__/
 *.pyc
+heapdump

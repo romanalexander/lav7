@@ -13,9 +13,10 @@ import (
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
-const windowSize = 2048
-const chanBufsize = 256
-const MaxPingTries uint64 = 3
+const windowSize = 512
+const chanBufsize = 64
+const MaxPingTries uint64 = 2
+const RecoveryTimeout = time.Second * 3
 
 // Sessions contains each raknet client sessions.
 var Sessions map[string]*Session
@@ -47,35 +48,40 @@ func GetSession(address *net.UDPAddr, sendChannel chan Packet,
 
 // Session contains player specific values for raknet-level communication.
 type Session struct {
-	Status         byte
-	ReceivedChan   chan Packet              // Packet from router
-	SendChan       chan Packet              // Send request to router
-	PlayerChan     chan *EncapsulatedPacket // Send request from player
-	packetChan     chan<- *buffer.Buffer    // Packet delivery to player
-	ID             uint64
-	Address        *net.UDPAddr
-	updateTicker   *time.Ticker
-	timeout        *time.Timer
-	ackQueue       map[uint32]bool
-	nackQueue      map[uint32]bool
-	mtuSize        uint16
-	recovery       map[uint32]*DataPacket
-	recoveryLock   *sync.Mutex
+	Status       byte
+	ReceivedChan chan Packet              // Packet from router
+	SendChan     chan Packet              // Send request to router
+	PlayerChan   chan *EncapsulatedPacket // Send request from player
+	packetChan   chan<- *buffer.Buffer    // Packet delivery to player
+
+	ID           uint64
+	Address      *net.UDPAddr
+	updateTicker *time.Ticker
+	timeout      *time.Timer
+	mtuSize      uint16
+
+	ackQueue     map[uint32]bool
+	nackQueue    map[uint32]bool
+	recovery     map[uint32]*DataPacket
+	recoveryLock *sync.Mutex
+
 	packetWindow   map[uint32]bool
 	windowBorder   [2]uint32 // Window range: [windowBorder[0], windowBorder[1])
 	reliableWindow map[uint32]*EncapsulatedPacket
 	reliableBorder [2]uint32 // Window range: [windowBorder[0], windowBorder[1])
-	splitTable     map[uint16]map[uint32][]byte
-	seqNumber      uint32 // Send
-	lastSeq        uint32 // Recv
-	lastMsgIndex   uint32
-	splitID        uint16
-	messageIndex   uint32
-	channelIndex   [8]uint32
-	playerAdder    func(*net.UDPAddr) chan<- *buffer.Buffer
-	playerRemover  func(*net.UDPAddr) error
-	pingTries      uint64
-	closed         chan struct{}
+
+	seqNumber    uint32 // Send
+	lastSeq      uint32 // Recv
+	lastMsgIndex uint32
+	splitID      uint16
+	splitTable   map[uint16]map[uint32][]byte
+	messageIndex uint32
+	channelIndex [8]uint32
+
+	playerAdder   func(*net.UDPAddr) chan<- *buffer.Buffer
+	playerRemover func(*net.UDPAddr) error
+	pingTries     uint64
+	closed        chan struct{}
 }
 
 // Init sets initial value for session.
@@ -157,7 +163,7 @@ func (s *Session) update() {
 	}
 	s.recoveryLock.Lock()
 	for seq, pk := range s.recovery {
-		if pk.SendTime.Add(time.Second * 8).Before(time.Now()) {
+		if pk.SendTime.Add(RecoveryTimeout).Before(time.Now()) {
 			s.send(pk.Buffer)
 			delete(s.recovery, seq)
 		} else {
@@ -333,12 +339,12 @@ func (s *Session) send(pk *buffer.Buffer) {
 
 // Close stops current session.
 func (s *Session) Close(reason string) {
-	data := &EncapsulatedPacket{Buffer: buffer.FromBytes([]byte{0x15})}
-	s.sendEncapsulatedDirect(data)
 	s.updateTicker.Stop()
 	s.timeout.Stop()
 	s.closed <- struct{}{}
 	s.playerRemover(s.Address)
+	data := &EncapsulatedPacket{Buffer: buffer.FromBytes([]byte{0x15})}
+	s.sendEncapsulatedDirect(data)
 	close(s.packetChan)
 	blockLock.Lock()
 	defer blockLock.Unlock()

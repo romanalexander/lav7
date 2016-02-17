@@ -64,6 +64,10 @@ func HandleCommand() {
 		case "netbytes":
 			bs := atomic.LoadUint64(&raknet.GotBytes)
 			log.Printf("%dKBs", bs>>10)
+		case "dump":
+			f, _ := os.Create("heapdump")
+			debug.WriteHeapDump(f.Fd())
+			log.Printf("Done")
 		}
 	}
 }

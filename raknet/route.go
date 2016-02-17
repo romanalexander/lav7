@@ -47,12 +47,13 @@ func (r *Router) Start() {
 }
 
 func (r *Router) receivePacket() {
+	var recvbuf []byte
 	defer r.conn.Close()
 	for {
 		var n int
 		var addr *net.UDPAddr
 		var err error
-		recvbuf := make([]byte, 1024*1024)
+		recvbuf = make([]byte, 1024*1024)
 		if n, addr, err = r.conn.ReadFromUDP(recvbuf); err != nil {
 			fmt.Println("Error while reading packet:", err)
 			continue

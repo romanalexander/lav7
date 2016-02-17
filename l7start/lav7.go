@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"reflect"
 	"runtime"
 	"time"
@@ -64,8 +65,8 @@ func startRouter() {
 	var r *raknet.Router
 	var err error
 	if r, err = raknet.CreateRouter(lav7.RegisterPlayer, lav7.UnregisterPlayer, 19132); err != nil {
-		fmt.Println(err)
-		return
+		fmt.Println("Error:", err)
+		os.Exit(1)
 	}
 	r.Start()
 }
