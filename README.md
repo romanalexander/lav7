@@ -1,7 +1,8 @@
-`Copyright (C) 2016 cr0sh(Nam JH.)
-This program comes with ABSOLUTELY NO WARRANTY.
+`Copyright (C) 2016 cr0sh(Nam JH.)`
+
+`This program comes with ABSOLUTELY NO WARRANTY.
 This is free software, and you are welcome to redistribute it
-under certain conditions; read LICENSE.txt in root of the repository`
+under certain conditions; read LICENSE.txt in root of the repository.`
 
 # lav7
 [![GoDoc](https://godoc.org/github.com/L7-MCPE/lav7?status.svg)](https://godoc.org/github.com/L7-MCPE/lav7)
