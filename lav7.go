@@ -16,6 +16,13 @@ const (
 	MaxPlayers = 20
 )
 
+// GitVersion is a git commit hash for this project.
+// You should set this with -ldflags "-X github.com/L7-MCPE/lav7.GitVersion="
+var GitCommit = "unknown"
+
+// BuildTime is a timestamp when the program is built.
+var BuildTime = "unknown"
+
 // Players is a map containing Player structs.
 var Players = make(map[string]*Player)
 
