@@ -40,6 +40,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 	iteratorLock.Lock()
 	Players[identifier] = p
 	iteratorLock.Unlock()
+	atomic.AddInt32(&raknet.OnlinePlayers, 1)
 	go p.process()
 	go p.updateChunk()
 	return ch
@@ -62,6 +63,7 @@ func UnregisterPlayer(addr *net.UDPAddr) error {
 		iteratorLock.Lock()
 		delete(Players, identifier)
 		iteratorLock.Unlock()
+		atomic.AddInt32(&raknet.OnlinePlayers, -1)
 		if p.loggedIn {
 			Message(p.Username + " disconnected")
 		}

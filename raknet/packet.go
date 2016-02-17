@@ -63,7 +63,7 @@ func NewEncapsulated(buf *buffer.Buffer) (ep *EncapsulatedPacket) {
 	return
 }
 
-// TotalLen returns total binary length of EncapsulatedPacket
+// TotalLen returns total binary length of EncapsulatedPacket.
 func (ep *EncapsulatedPacket) TotalLen() int {
 	return 3 + ep.Buffer.Len() + func() int {
 		return func() int {

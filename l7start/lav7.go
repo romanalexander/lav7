@@ -18,8 +18,18 @@ import (
 
 func main() {
 	//go http.ListenAndServe(":8080", nil)
+	log.Println("Starting lav7 version", lav7.Version)
 	start := time.Now()
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	initLevel()
+	initRaknet()
+	startRouter()
+	log.Println("All done! Elapsed time:", time.Since(start).Seconds(), "seconds")
+	log.Println("Server is ready.")
+	command.HandleCommand()
+}
+
+func initLevel() {
 	g := new(gen.SampleGenerator)
 	log.Println("Generator type:", reflect.TypeOf(g))
 	g.Init()
@@ -37,8 +47,15 @@ func main() {
 		}
 	}
 	wg.Wait()
-	log.Println("All done! Elapsed time:", time.Since(start).Seconds(), "seconds")
-	log.Println("Starting raknet router...")
+}
+
+func initRaknet() {
+	raknet.ServerName = lav7.ServerName
+	raknet.MaxPlayers = lav7.MaxPlayers
+}
+
+func startRouter() {
+	log.Println("Starting raknet router, version", raknet.Version)
 	var r *raknet.Router
 	var err error
 	if r, err = raknet.CreateRouter(lav7.RegisterPlayer, lav7.UnregisterPlayer, 19132); err != nil {
@@ -46,6 +63,4 @@ func main() {
 		return
 	}
 	r.Start()
-	log.Println("Server is ready.")
-	command.HandleCommand()
 }

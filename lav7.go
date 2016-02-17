@@ -1,3 +1,4 @@
+// Package lav7 is not only a lightweight Minecraft:PE server, but provides Minecraft:PE protocol/gameplay mechanics.
 package lav7
 
 import (
@@ -7,22 +8,18 @@ import (
 )
 
 const (
-	// MinecraftProtocol is a mojang network protocol version.
-	MinecraftProtocol = 45
-	// MinecraftVersion is a human readable minecraft version.
-	MinecraftVersion = "0.14.0.7"
+	// Version is a version of this server.
+	Version = "0.1.0 in-dev"
+	// ServerName contains human readable server name
+	ServerName = "Lav7 - lightweight MCPE server"
+	// MaxPlayers is count of maximum available players
+	MaxPlayers = 20
 )
-
-// ServerName contains human readable server name
-var ServerName = "Lav7 - lightweight MCPE server"
 
 // Players is a map containing Player structs.
 var Players = make(map[string]*Player)
 
 var iteratorLock = new(sync.Mutex)
-
-// MaxPlayers is count of maximum available players
-var MaxPlayers = 20
 
 var LastEntityID uint64
 

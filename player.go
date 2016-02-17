@@ -107,9 +107,13 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		if p.loggedIn {
 			return
 		}
-		if len(Players) >= raknet.MaxPlayers {
+		iteratorLock.Lock()
+		if len(Players) >= MaxPlayers {
+			iteratorLock.Unlock()
 			p.disconnect("Server is full!")
+			return
 		}
+		iteratorLock.Unlock()
 		p.Username = pk.Username
 
 		ret := &PlayStatus{}

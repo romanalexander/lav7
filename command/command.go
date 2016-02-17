@@ -1,3 +1,4 @@
+// Package command is a handler for user command input from stdin or in-game.
 package command
 
 import (

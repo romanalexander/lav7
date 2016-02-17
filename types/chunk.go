@@ -2,6 +2,7 @@ package types
 
 import "sync"
 
+// ChunkDelivery is a type for passing full chunk data to players.
 type ChunkDelivery struct {
 	X, Z  int32
 	Chunk *Chunk

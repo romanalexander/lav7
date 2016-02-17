@@ -331,7 +331,7 @@ func (s *Session) send(pk *buffer.Buffer) {
 	s.SendChan <- Packet{pk, s.Address}
 }
 
-// Close stops current session
+// Close stops current session.
 func (s *Session) Close(reason string) {
 	data := &EncapsulatedPacket{Buffer: buffer.FromBytes([]byte{0x15})}
 	s.sendEncapsulatedDirect(data)
