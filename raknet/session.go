@@ -246,6 +246,7 @@ func (s *Session) joinSplits(ep *EncapsulatedPacket) {
 		for i := uint32(0); i < ep.SplitCount; i++ {
 			sep.Write(tab[i])
 		}
+		delete(s.splitTable, ep.SplitID)
 		s.handleEncapsulated(sep)
 	}
 }
