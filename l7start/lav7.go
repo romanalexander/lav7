@@ -18,7 +18,8 @@ import (
 
 func main() {
 	//go http.ListenAndServe(":8080", nil)
-	log.Printf("Starting lav7 version %s(git commit %s), licensed under the GPLv3 License", lav7.Version, lav7.GitCommit)
+	log.Printf("Starting lav7 version %s(git commit %s)", lav7.Version, lav7.GitCommit)
+	log.Println("lav7 is licensed under the GPLv3 License; see http://rawgit.com/L7-MCPE/lav7/master/LICENSE.txt")
 	log.Printf("Build timestamp: %s", lav7.BuildTime)
 	start := time.Now()
 	runtime.GOMAXPROCS(runtime.NumCPU())
