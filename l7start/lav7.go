@@ -3,10 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	_ "net/http/pprof"
 	"reflect"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/L7-MCPE/lav7"
@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	//go http.ListenAndServe(":8080", nil)
+	go http.ListenAndServe(":8080", nil)
 	log.Printf("Starting lav7 version %s(git commit %s)", lav7.Version, lav7.GitCommit)
 	log.Println("lav7 is licensed under the GPLv3 License; see http://rawgit.com/L7-MCPE/lav7/master/LICENSE.txt")
 	log.Printf("Build timestamp: %s", lav7.BuildTime)
@@ -39,16 +39,19 @@ func initLevel() {
 	p := new(dummy.Provider)
 	p.Init(g.Gen, lav7.GetDefaultLevel().Name)
 	lav7.GetDefaultLevel().Init(p)
-	genRadius := int32(5)
-	log.Printf("Level init done. Preparing chunks(initial radius: %d)", genRadius)
-	wg := new(sync.WaitGroup)
-	wg.Add(int((genRadius*2 + 1) * (genRadius*2 + 1)))
-	for x := -genRadius; x <= genRadius; x++ {
-		for z := -genRadius; z <= genRadius; z++ {
-			go func(x, z int32) { lav7.GetDefaultLevel().GetChunk(x, z, true); wg.Done() }(x, z)
+	// genRadius := int32(5)
+	log.Printf("Level init done")
+	/*
+		log.Printf("Level init done. Preparing chunks(initial radius: %d)", genRadius)
+		wg := new(sync.WaitGroup)
+		wg.Add(int((genRadius*2 + 1) * (genRadius*2 + 1)))
+		for x := -genRadius; x <= genRadius; x++ {
+			for z := -genRadius; z <= genRadius; z++ {
+				go func(x, z int32) { lav7.GetDefaultLevel().GetChunk(x, z, true); wg.Done() }(x, z)
+			}
 		}
-	}
-	wg.Wait()
+		wg.Wait()
+	*/
 }
 
 func initRaknet() {

@@ -9,9 +9,11 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/proto"
+	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 )
@@ -56,8 +58,12 @@ func HandleCommand() {
 			n := runtime.Stack(b[:], true)
 			fmt.Println(string(b[:n]))
 		case "gc":
+			runtime.GC()
 			debug.FreeOSMemory()
 			log.Println("Done")
+		case "netbytes":
+			bs := atomic.LoadUint64(&raknet.GotBytes)
+			log.Printf("%dKBs", bs>>10)
 		}
 	}
 }

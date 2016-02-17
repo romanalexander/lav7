@@ -9,7 +9,7 @@ type ChunkDelivery struct {
 }
 
 // Chunk contains block data for each MCPE level chunks.
-// Each chunk holds 16*16*128 blocks, and consumes at least 5200 bytes of memory.
+// Each chunk holds 16*16*128 blocks, and consumes at least 83200 bytes of memory.
 //
 // A zero value for Chunk is a valid value.
 type Chunk struct {

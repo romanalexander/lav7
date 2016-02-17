@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/L7-MCPE/lav7/util/buffer"
@@ -13,6 +14,7 @@ import (
 var serverID uint64
 var blockList = make(map[string]time.Time)
 var blockLock = new(sync.Mutex)
+var GotBytes uint64
 
 // Router handles packets from network, and manages sessions.
 type Router struct {
@@ -50,11 +52,12 @@ func (r *Router) receivePacket() {
 		var n int
 		var addr *net.UDPAddr
 		var err error
-		var recvbuf [1024 * 1024 * 4]byte
-		if n, addr, err = r.conn.ReadFromUDP(recvbuf[:]); err != nil {
+		recvbuf := make([]byte, 1024*1024)
+		if n, addr, err = r.conn.ReadFromUDP(recvbuf); err != nil {
 			fmt.Println("Error while reading packet:", err)
 			continue
 		} else if n > 0 {
+			atomic.AddUint64(&GotBytes, uint64(n))
 			buf := buffer.FromBytes(recvbuf[0:n])
 			pk := Packet{
 				Buffer:  buf,
