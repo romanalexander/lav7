@@ -47,6 +47,7 @@ func initLevel(genRadius int32) {
 	p := new(dummy.Provider)
 	p.Init(lav7.GetDefaultLevel().Name)
 	lav7.GetDefaultLevel().Init(p)
+	lav7.GetDefaultLevel().Gen = g.Gen
 	// log.Printf("Level init done")
 
 	log.Printf("Level init done. Preparing chunks(initial radius: %d)", genRadius)
