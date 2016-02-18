@@ -14,8 +14,8 @@ import (
 
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/command"
-	"github.com/L7-MCPE/lav7/level/format/dummy"
-	"github.com/L7-MCPE/lav7/level/gen"
+	"github.com/L7-MCPE/lav7/format/dummy"
+	"github.com/L7-MCPE/lav7/gen"
 	"github.com/L7-MCPE/lav7/raknet"
 )
 
@@ -35,7 +35,7 @@ func main() {
 	initRaknet()
 	startRouter()
 	log.Println("All done! Elapsed time:", time.Since(start).Seconds(), "seconds")
-	log.Println("Server is ready.")
+	log.Println("Server is ready. Type 'stop' to stop server.")
 	command.HandleCommand()
 }
 

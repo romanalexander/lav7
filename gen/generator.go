@@ -1,4 +1,5 @@
-package level
+// Package gen provides MCPE level generator for creating worlds.
+package gen
 
 import "github.com/L7-MCPE/lav7/types"
 

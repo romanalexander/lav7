@@ -6,7 +6,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/L7-MCPE/lav7/level"
 	. "github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/types"
@@ -31,7 +30,7 @@ type Player struct {
 	SkinName string
 
 	Position            util.Vector3
-	Level               *level.Level
+	Level               *Level
 	Yaw, BodyYaw, Pitch float32
 
 	playerShown map[uint64]struct{}
@@ -210,7 +209,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 				},
 			})
 		} else {
-			BroadcastPacket(&UpdateBlock{
+			p.SendPacket(&UpdateBlock{
 				BlockRecords: []BlockRecord{
 					BlockRecord{
 						X:     uint32(pk.X),

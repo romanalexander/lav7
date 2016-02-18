@@ -1,24 +1,16 @@
-// Package level implements MCPE world components and defines associated interfaces.
-package level
+package lav7
 
 import (
 	"fmt"
 	"log"
 	"sync"
 
+	"github.com/L7-MCPE/lav7/format"
 	"github.com/L7-MCPE/lav7/types"
 )
 
-const (
-	DayTime     = 0
-	SunsetTime  = 12000
-	NightTime   = 14000
-	SunriseTime = 23000
-	FullTime    = 24000
-)
-
 type Level struct {
-	LevelProvider
+	format.Provider
 	Name string
 
 	ChunkMap   map[[2]int32]*types.Chunk
@@ -27,8 +19,8 @@ type Level struct {
 }
 
 // Init initializes the level.
-func (lv *Level) Init(pv LevelProvider) {
-	lv.LevelProvider = pv
+func (lv *Level) Init(pv format.Provider) {
+	lv.Provider = pv
 	lv.ChunkMap = make(map[[2]int32]*types.Chunk)
 	lv.ChunkMutex = new(sync.Mutex)
 	pv.Init(lv.Name)
@@ -46,26 +38,24 @@ func (lv *Level) Init(pv LevelProvider) {
 // 4: West  (X-)
 // 5: East  (X+)`
 func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (canceled bool) {
-	px, py, pz := *x, *y, *z
 	switch face {
 	case 0:
-		py--
+		*y--
 	case 1:
-		py++
+		*y++
 	case 2:
-		pz--
+		*z--
 	case 3:
-		pz++
+		*z++
 	case 4:
-		px--
+		*x--
 	case 5:
-		px++
+		*x++
 	}
 	if f := lv.GetBlock(*x, *y, *z); f == 0 {
 		lv.Set(*x, *y, *z, item.Block())
-		*x, *y, *z = px, py, pz
 	} else {
-		log.Println("Block already exists:", f)
+		log.Printf("Block %d(%s) already exists on x:%d, y:%d, z: %d; cancelling.", f, types.ID(f), *x, *y, *z)
 		canceled = true
 	}
 	return
@@ -154,15 +144,15 @@ func (lv *Level) SetBlockMeta(x, y, z int32, b byte) {
 	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), b)
 }
 
-func (lv Level) Get(x, y, z int32) *types.Block {
+func (lv Level) Get(x, y, z int32) types.Block {
 	c := lv.GetChunk(x>>4, z>>4, true)
-	return &types.Block{
+	return types.Block{
 		ID:   c.GetBlock(byte(x&0xf), byte(y), byte(z&0xf)),
 		Meta: c.GetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf)),
 	}
 }
 
-func (lv Level) Set(x, y, z int32, block *types.Block) {
+func (lv Level) Set(x, y, z int32, block types.Block) {
 	c := lv.GetChunk(x>>4, z>>4, true)
 	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), block.ID)
 	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), block.Meta)

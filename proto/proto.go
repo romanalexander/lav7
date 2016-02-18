@@ -4,7 +4,6 @@ package proto
 import (
 	"log"
 
-	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
@@ -295,6 +294,14 @@ func (i Text) Write() *buffer.Buffer {
 	return buf
 }
 
+const (
+	DayTime     = 0
+	SunsetTime  = 12000
+	NightTime   = 14000
+	SunriseTime = 23000
+	FullTime    = 24000
+)
+
 type SetTime struct {
 	Time    uint32
 	Started bool
@@ -303,13 +310,13 @@ type SetTime struct {
 func (i SetTime) Pid() byte { return SetTimeHead }
 
 func (i *SetTime) Read(buf *buffer.Buffer) {
-	i.Time = uint32((buf.ReadInt() / 19200) * level.FullTime)
+	i.Time = uint32((buf.ReadInt() / 19200) * FullTime)
 	i.Started = buf.ReadBool()
 }
 
 func (i SetTime) Write() *buffer.Buffer {
 	buf := new(buffer.Buffer)
-	buf.WriteInt(uint32((i.Time / level.FullTime) * 19200))
+	buf.WriteInt(uint32((i.Time * 19200) / FullTime))
 	buf.WriteBool(i.Started)
 	return buf
 }

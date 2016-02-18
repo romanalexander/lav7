@@ -1,11 +1,7 @@
 // Package lav7 is not only a lightweight Minecraft:PE server, but provides Minecraft:PE protocol/gameplay mechanics.
 package lav7
 
-import (
-	"sync"
-
-	"github.com/L7-MCPE/lav7/level"
-)
+import "sync"
 
 const (
 	// Version is a version of this server.
@@ -30,7 +26,7 @@ var iteratorLock = new(sync.Mutex)
 
 var LastEntityID uint64
 
-var levels = map[string]*level.Level{
-	defaultLvl: &level.Level{Name: "dummy"},
+var levels = map[string]*Level{
+	defaultLvl: &Level{Name: "dummy"},
 }
 var defaultLvl = "default"

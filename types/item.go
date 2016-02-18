@@ -9,14 +9,14 @@ import (
 
 // Item contains item data for each container slots.
 type Item struct {
-	ID       uint16
+	ID       ID
 	Meta     uint16
 	Amount   byte
 	Compound *nbt.Compound
 }
 
 func (i *Item) Read(buf *buffer.Buffer) {
-	i.ID = buf.ReadShort()
+	i.ID = ID(buf.ReadShort())
 	if i.ID == 0 {
 		return
 	}
@@ -35,7 +35,7 @@ func (i Item) Write() []byte {
 		return []byte{0, 0}
 	}
 	buf := new(buffer.Buffer)
-	buf.WriteShort(i.ID)
+	buf.WriteShort(uint16(i.ID))
 	buf.WriteByte(i.Amount)
 	buf.WriteShort(i.Meta)
 	compound := new(bytes.Buffer)
@@ -45,17 +45,9 @@ func (i Item) Write() []byte {
 	return buf.Done()
 }
 
-func (i Item) Block() *Block {
-	if i.ID > 255 {
-		return &Block{} // Air
-	}
-	if i.Meta > 15 {
-		return &Block{
-			ID: byte(i.ID),
-		}
-	}
-	return &Block{
-		ID:   byte(i.ID),
+func (i Item) Block() Block {
+	return Block{
+		ID:   i.ID.Block(),
 		Meta: byte(i.Meta),
 	}
 }

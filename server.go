@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/L7-MCPE/lav7/level"
 	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util/buffer"
@@ -157,7 +156,7 @@ func BroadcastPacket(pk proto.Packet) {
 }
 
 // GetLevel returns level reference with given name if exists, or nil.
-func GetLevel(name string) *level.Level {
+func GetLevel(name string) *Level {
 	if l, ok := levels[name]; ok {
 		return l
 	}
@@ -165,7 +164,7 @@ func GetLevel(name string) *level.Level {
 }
 
 // GetDefaultLevel returns default level reference.
-func GetDefaultLevel() *level.Level {
+func GetDefaultLevel() *Level {
 	return levels[defaultLvl]
 }
 
