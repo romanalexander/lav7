@@ -2,7 +2,9 @@
 package level
 
 import (
+	"fmt"
 	"log"
+	"sync"
 
 	"github.com/L7-MCPE/lav7/types"
 )
@@ -18,14 +20,18 @@ const (
 type Level struct {
 	LevelProvider
 	Name string
+
+	ChunkMap   map[[2]int32]*types.Chunk
+	ChunkMutex *sync.Mutex
+	Gen        func(int32, int32) *types.Chunk
 }
 
+// Init initializes the level.
 func (lv *Level) Init(pv LevelProvider) {
 	lv.LevelProvider = pv
-}
-
-func (lv *Level) Provider() LevelProvider {
-	return lv.LevelProvider
+	lv.ChunkMap = make(map[[2]int32]*types.Chunk)
+	lv.ChunkMutex = new(sync.Mutex)
+	pv.Init(lv.Name)
 }
 
 // OnUseItem handles UseItemPacket and determines position to update block position.
@@ -33,12 +39,12 @@ func (lv *Level) Provider() LevelProvider {
 //
 // Face direction:
 //
-// 0: Down  (Y-)
+// `0: Down  (Y-)
 // 1: Up    (Y+)
 // 2: North (Z-)
 // 3: South (Z+)
 // 4: West  (X-)
-// 5: East  (X+)
+// 5: East  (X+)`
 func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (canceled bool) {
 	px, py, pz := *x, *y, *z
 	switch face {
@@ -63,6 +69,61 @@ func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (cancele
 		canceled = true
 	}
 	return
+}
+
+func (lv *Level) ChunkExists(cx, cz int32) bool {
+	lv.ChunkMutex.Lock()
+	_, ok := lv.ChunkMap[[2]int32{cx, cz}]
+	lv.ChunkMutex.Unlock()
+	return ok
+}
+
+func (lv *Level) GetChunk(cx, cz int32, create bool) *types.Chunk {
+	lv.ChunkMutex.Lock()
+	defer lv.ChunkMutex.Unlock()
+	if c, ok := lv.ChunkMap[[2]int32{cx, cz}]; ok {
+		return c
+	} else if path, ok := lv.Loadable(cx, cz); ok {
+		c, err := lv.LoadChunk(cx, cz, path)
+		if err != nil {
+			log.Println("Error while loading chunk:", err)
+			log.Println("Using empty chunk anyway.")
+			c = new(types.Chunk)
+			*c = types.FallbackChunk
+		}
+		lv.SetChunk(cx, cz, c)
+		return c
+	} else {
+		c := lv.Gen(cx, cz)
+		lv.SetChunk(cx, cz, c)
+		return c
+	}
+}
+
+func (lv *Level) SetChunk(cx, cz int32, c *types.Chunk) { // Should lock ChunkMutex before call
+	// lv.ChunkMutex.Lock()
+	// defer lv.ChunkMutex.Unlock()
+	if _, ok := lv.ChunkMap[[2]int32{cx, cz}]; ok {
+		panic("Tried to overwrite existing chunk!")
+	}
+	lv.ChunkMap[[2]int32{cx, cz}] = c
+}
+
+func (lv *Level) UnloadChunk(cx, cz int32, save bool) error { // Should lock ChunkMutex before call
+	if c, ok := lv.ChunkMap[[2]int32{cx, cz}]; ok {
+		delete(lv.ChunkMap, [2]int32{cx, cz})
+		if save {
+			return lv.WriteChunk(cx, cz, c)
+		}
+		return nil
+	}
+	return fmt.Errorf("Chunk %d:%d is not loaded", cx, cz)
+}
+
+func (lv *Level) Save() {
+	lv.ChunkMutex.Lock()
+	defer lv.ChunkMutex.Unlock()
+	lv.SaveAll(lv.ChunkMap)
 }
 
 func (lv Level) GetBlock(x, y, z int32) byte {

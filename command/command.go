@@ -68,6 +68,13 @@ func HandleCommand() {
 			f, _ := os.Create("heapdump")
 			debug.WriteHeapDump(f.Fd())
 			log.Printf("Done")
+		case "unloadall":
+			lv := lav7.GetDefaultLevel()
+			lv.ChunkMutex.Lock()
+			lv.ChunkMap = make(map[[2]int32]*types.Chunk)
+			lv.ChunkMutex.Unlock()
+		default:
+			log.Println("?")
 		}
 	}
 }

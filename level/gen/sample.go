@@ -17,7 +17,7 @@ func (s *SampleGenerator) Init() {
 			chunk.SetBiomeColor(x, z, x*16, x*z, z*16)
 		}
 	}
-	chunk.PopulateHeight()
+	//chunk.PopulateHeight()
 	s.Cache = chunk
 }
 

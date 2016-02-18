@@ -1,12 +1,11 @@
 package dummy
 
 import (
+	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util/buffer"
@@ -14,95 +13,80 @@ import (
 
 type Provider struct {
 	Name string
-
-	ChunkMap   map[[2]int32]*types.Chunk
-	ChunkMutex *sync.Mutex
-	Generator  func(int32, int32) *types.Chunk
 }
 
-func (pv *Provider) Init(gen func(int32, int32) *types.Chunk, name string) {
-	pv.ChunkMap = make(map[[2]int32]*types.Chunk)
-	pv.ChunkMutex = new(sync.Mutex)
-	pv.Generator = gen
+func (pv *Provider) Init(name string) {
 	pv.Name = name
 }
 
-func (pv *Provider) ChunkExists(cx, cz int32) bool {
-	pv.ChunkMutex.Lock()
-	_, ok := pv.ChunkMap[[2]int32{cx, cz}]
-	pv.ChunkMutex.Unlock()
-	return ok
-}
-
-func (pv *Provider) GetChunk(cx, cz int32, create bool) (chk *types.Chunk) {
-	pv.ChunkMutex.Lock()
-	defer pv.ChunkMutex.Unlock()
-	if c, ok := pv.ChunkMap[[2]int32{cx, cz}]; ok {
-		return c
-	}
-	if path, err := filepath.Abs("levels/" + pv.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw"); err != nil {
-		goto crt
-	} else if _, err := os.Stat(path); os.IsNotExist(err) {
-		goto crt
-	} else {
-		f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
-		if err != nil {
-			goto crt
-		}
-		b := make([]byte, 83200)
-		_, err = f.Read(b)
-		if err != nil {
-			goto crt
-		}
-		chk = new(types.Chunk)
-		buf := buffer.FromBytes(b)
-		chk.Mutex().Lock()
-		copy(chk.BlockData[:], buf.Read(16*16*128))
-		copy(chk.MetaData[:], buf.Read(16*16*64))
-		copy(chk.LightData[:], buf.Read(16*16*64))
-		copy(chk.SkyLightData[:], buf.Read(16*16*64))
-		copy(chk.HeightMap[:], buf.Read(16*16))
-		copy(chk.BiomeData[:], buf.Read(16*16*4))
-		chk.Mutex().Unlock()
-		pv.ChunkMap[[2]int32{cx, cz}] = chk
+func (pv *Provider) Loadable(cx, cz int32) (path string, ok bool) {
+	var err error
+	path, err = filepath.Abs("levels/" + pv.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw")
+	if err != nil {
+		ok = false
 		return
 	}
-crt:
-	if create {
-		chk = pv.Generator(cx, cz)
-		pv.ChunkMap[[2]int32{cx, cz}] = chk
+	f, err := os.Open(path)
+	if err != nil {
+		ok = false
 		return
 	}
+	fi, err := f.Stat()
+	if err != nil {
+		ok = false
+		return
+	}
+	ok = !fi.IsDir() && fi.Size() >= 83200
 	return
 }
 
-func (pv *Provider) SetChunk(cx, cz int32, force bool, c *types.Chunk) {
-	pv.ChunkMutex.Lock()
-	defer pv.ChunkMutex.Unlock()
-	if _, ok := pv.ChunkMap[[2]int32{cx, cz}]; !force && ok {
-		panic("Tried to overwrite existing chunk!")
+func (pv *Provider) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err error) {
+	var f *os.File
+	f, err = os.OpenFile(path, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return
 	}
-	if c.Mutex() == nil {
-		panic("Nil mutex: chunk may have been uninitialized!")
+	b := make([]byte, 83200)
+	_, err = f.Read(b)
+	if err != nil {
+		return
 	}
-	pv.ChunkMap[[2]int32{cx, cz}] = c
+	chunk = new(types.Chunk)
+	buf := buffer.FromBytes(b)
+	chunk.Mutex().Lock()
+	copy(chunk.BlockData[:], buf.Read(16*16*128))
+	copy(chunk.MetaData[:], buf.Read(16*16*64))
+	copy(chunk.LightData[:], buf.Read(16*16*64))
+	copy(chunk.SkyLightData[:], buf.Read(16*16*64))
+	copy(chunk.HeightMap[:], buf.Read(16*16))
+	copy(chunk.BiomeData[:], buf.Read(16*16*4))
+	chunk.Mutex().Unlock()
+	return
+
 }
 
-func (pv *Provider) Save() error {
-	pv.ChunkMutex.Lock()
-	defer pv.ChunkMutex.Unlock()
-	for k, c := range pv.ChunkMap {
-		path, _ := filepath.Abs("levels/" + pv.Name + "/" + strconv.Itoa(int(k[0])) + "_" + strconv.Itoa(int(k[1])) + ".raw")
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			log.Println("Error while creating dir:", err)
-			continue
+func (pv *Provider) WriteChunk(cx, cz int32, c *types.Chunk) error {
+	path, _ := filepath.Abs("levels/" + pv.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw")
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	buf := new(buffer.Buffer)
+	buf.BatchWrite(c.BlockData[:], c.MetaData[:], c.LightData[:], c.SkyLightData[:], c.HeightMap[:], c.BiomeData[:])
+	if err := ioutil.WriteFile(path, buf.Done(), 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (pv *Provider) SaveAll(chunks map[[2]int32]*types.Chunk) error {
+	errstr := ""
+	for k, c := range chunks {
+		if err := pv.WriteChunk(k[0], k[1], c); err != nil {
+			fmt.Sprintln(errstr, err.Error())
 		}
-		buf := new(buffer.Buffer)
-		buf.BatchWrite(c.BlockData[:], c.MetaData[:], c.LightData[:], c.SkyLightData[:], c.HeightMap[:], c.BiomeData[:])
-		if err := ioutil.WriteFile(path, buf.Done(), 0644); err != nil {
-			log.Println("Error while saving:", err)
-			continue
-		}
+	}
+	if errstr == "" {
+		return fmt.Errorf(errstr)
 	}
 	return nil
 }

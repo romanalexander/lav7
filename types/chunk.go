@@ -22,6 +22,9 @@ type Chunk struct {
 	mutex        *sync.RWMutex
 }
 
+// FallbackChunk is a chunk to be returned if level provider fails to load chunk from file.
+var FallbackChunk Chunk = *new(Chunk)
+
 // CopyFrom gets everything from given chunk, and writes to the chunk instance.
 // Mutex is not shared with given chunk. You don't need to RLock the copying chunk.
 func (c *Chunk) CopyFrom(chunk *Chunk) {
