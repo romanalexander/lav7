@@ -205,6 +205,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 							ID:   byte(pk.Item.ID),
 							Meta: byte(pk.Item.Meta),
 						},
+						Flags: UpdateAllPriority,
 					},
 				},
 			})
@@ -216,6 +217,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 						Y:     byte(pk.Y),
 						Z:     uint32(pk.Z),
 						Block: types.Block{},
+						Flags: UpdateAllPriority,
 					},
 				},
 			})

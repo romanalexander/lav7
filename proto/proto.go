@@ -611,7 +611,7 @@ func (i RemoveBlock) Write() *buffer.Buffer {
 }
 
 const (
-	UpdateNone byte = 1<<iota - 1
+	UpdateNone byte = (1 << iota) >> 1
 	UpdateNeighbors
 	UpdateNetwork
 	UpdateNographic
