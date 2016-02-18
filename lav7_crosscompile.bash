@@ -3,6 +3,7 @@
 # For Android support, compile Go toolchain for Android.
 # https://jasonplayne.com/programming-2/how-to-cross-compile-golang-for-android
 # And, set $NDK_CC to arm-linux-androideabi-gcc toolchain directory.
+# Modifying golang-crosscompile's bash script to support go-android-arm is needed. Just add android/arm to PLATFORMS.
 #
 # Usage:
 #   lav7-crosscompile $GOOS-$GOARCH: cross-compiles lav7 to ~/builds/$GOOS/$GOARCH
