@@ -69,9 +69,13 @@ function lav7-build-all {
 
 function lav7-build-publish {
     mkdir -p ~/share/lav7/builds
+    local BDATE=$(LC_ALL=en_US.utf-8 date -u +%Y-%m-%d)
     eval "lav7-build-all"
+    echo "Generating sha256sum..."
     for i in $(find . -type f -print); do sha256sum "$i"; done > SHA256SUM
     cd ~
-    rm -Rf ~/share/lav7/builds/`LC_ALL=en_US.utf-8 date -u +%Y-%m-%d`
-    mv builds ~/share/lav7/builds/`LC_ALL=en_US.utf-8 date -u +%Y-%m-%d`
+    rm -Rf ~/share/lav7/builds/$BDATE
+    mv builds ~/share/lav7/builds/$BDATE
+    rm -Rf ~/share/lav7/builds/latest
+    ln -s ~/share/lav7/builds/$BDATE ~/share/lav7/builds/latest
 }
