@@ -76,11 +76,13 @@ func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (cancele
 		*x--
 	case 5:
 		*x++
+	case 255:
+		return
 	}
 	if f := lv.GetBlock(*x, *y, *z); f == 0 {
 		lv.Set(*x, *y, *z, item.Block())
 	} else {
-		log.Printf("Block %d(%s) already exists on x:%d, y:%d, z: %d; cancelling.", f, types.ID(f), *x, *y, *z)
+		log.Printf("Block %d(%s) already exists on x:%d, y:%d, z: %d; cancelling. (face %d)", f, types.ID(f), *x, *y, *z, face)
 		canceled = true
 	}
 	return

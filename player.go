@@ -184,7 +184,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		p.Level.SetBlock(int32(pk.X), int32(pk.Y), int32(pk.Z), 0) // Air
 		p.BroadcastOthers(&UpdateBlock{
 			BlockRecords: []BlockRecord{
-				BlockRecord{
+				{
 					X:     uint32(pk.X),
 					Y:     byte(pk.Y),
 					Z:     uint32(pk.Z),
@@ -199,7 +199,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		if !p.Level.OnUseItem(&px, &py, &pz, pk.Face, pk.Item) {
 			p.BroadcastOthers(&UpdateBlock{
 				BlockRecords: []BlockRecord{
-					BlockRecord{
+					{
 						X: uint32(px),
 						Y: byte(py),
 						Z: uint32(pz),
@@ -214,7 +214,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		} else {
 			p.SendPacket(&UpdateBlock{
 				BlockRecords: []BlockRecord{
-					BlockRecord{
+					{
 						X:     uint32(pk.X),
 						Y:     byte(pk.Y),
 						Z:     uint32(pk.Z),
@@ -313,7 +313,7 @@ func (p *Player) updateMove(pk *MovePlayer) {
 			if pl.IsVisible(p) {
 				pl.SendPacket(&MoveEntity{
 					EntityIDs: []uint64{p.EntityID},
-					EntityPos: [][6]float32{[6]float32{
+					EntityPos: [][6]float32{{
 						pk.X,
 						pk.Y,
 						pk.Z,
@@ -337,7 +337,7 @@ func (p *Player) firstSpawn() {
 			player.ShowPlayer(p)
 			player.SendPacket(&PlayerList{
 				Type: PlayerListAdd,
-				PlayerEntries: []PlayerListEntry{PlayerListEntry{
+				PlayerEntries: []PlayerListEntry{{
 					RawUUID:  p.UUID,
 					EntityID: p.EntityID,
 					Username: p.Username,

@@ -51,7 +51,7 @@ func (m *MutexTracer) Init() {
 
 // Lock locks the hidden mutex for tracer, and records when the lock grabbed.
 func (m *MutexTracer) Lock() {
-	// log.Print("Aquiring lock")
+	// log.Print("acquiring lock")
 	m.Mutex.Lock()
 	m.lastLock = time.Now()
 	m.lockTrace = GetTrace()
@@ -61,9 +61,8 @@ func (m *MutexTracer) Lock() {
 func (m *MutexTracer) Unlock() {
 	grabtime := time.Since(m.lastLock).Seconds()
 	if grabtime > 1 {
-		log.Println("!!! Lock grabbed for > 1 seconds?!?! !!!")
+		log.Printf("!!! Lock grabbed for %.3f > 1 seconds?!?! !!!", grabtime)
 		fmt.Print(m.lockTrace)
-		fmt.Print(GetTrace())
 	}
 	m.Mutex.Unlock()
 }
@@ -96,7 +95,7 @@ func (m *RWMutexTracer) Init() {
 
 // Lock locks the hidden mutex for tracer, and records when the lock grabbed.
 func (m *RWMutexTracer) Lock() {
-	// log.Print("Aquiring lock")
+	// log.Print("acquiring lock")
 	m.RWMutex.Lock()
 	m.lastLock = time.Now()
 	m.lockTrace = GetTrace()
@@ -106,9 +105,8 @@ func (m *RWMutexTracer) Lock() {
 func (m *RWMutexTracer) Unlock() {
 	grabtime := time.Since(m.lastLock).Seconds()
 	if grabtime > 1 {
-		log.Println("!!! Lock grabbed for > 1 seconds?!?! !!!")
+		log.Printf("!!! Lock grabbed for %.3f > 1 seconds?!?! !!!", grabtime)
 		fmt.Print(m.lockTrace)
-		fmt.Print(GetTrace())
 	}
 	m.RWMutex.Unlock()
 }

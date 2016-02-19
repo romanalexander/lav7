@@ -27,6 +27,6 @@ var iteratorLock = new(sync.Mutex)
 var LastEntityID uint64
 
 var levels = map[string]*Level{
-	defaultLvl: &Level{Name: "dummy"},
+	defaultLvl: {Name: "dummy"},
 }
 var defaultLvl = "default"

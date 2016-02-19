@@ -12,7 +12,7 @@ func (t ackTable) Len() int           { return len(t) }
 func (t ackTable) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t ackTable) Less(i, j int) bool { return t[i] < t[j] }
 
-// EncodeAck packs packet sequence numbers into Raknet acknowledgement format.
+// EncodeAck packs packet sequence numbers into Raknet acknowledgment format.
 func EncodeAck(t ackTable) (b *buffer.Buffer) {
 	b = buffer.FromBytes(make([]byte, 0))
 	sort.Sort(t)

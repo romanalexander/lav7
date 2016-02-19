@@ -31,7 +31,7 @@ func HandleCommand() {
 			lav7.SpawnPlayer(&lav7.Player{
 				Username: "Test",
 				EntityID: 99,
-				Position: util.Vector3{0, 65, 0},
+				Position: util.Vector3{X: 0, Y: 65, Z: 0},
 			})
 		case "move":
 			lav7.BroadcastPacket(&proto.MovePlayer{

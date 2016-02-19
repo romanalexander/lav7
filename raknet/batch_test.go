@@ -16,45 +16,45 @@ func TestFormatParse(t *testing.T) {
 		expect []util.FmtElement
 	}{
 		{"B", []util.FmtElement{
-			util.FmtElement{[]byte("B")[0], 1},
+			{[]byte("B")[0], 1},
 		}},
 		{"S", []util.FmtElement{
-			util.FmtElement{[]byte("S")[0], 1},
+			{[]byte("S")[0], 1},
 		}},
 		{"D32", []util.FmtElement{
-			util.FmtElement{[]byte("D")[0], 32},
+			{[]byte("D")[0], 32},
 		}},
 		{"BBS", []util.FmtElement{
-			util.FmtElement{[]byte("B")[0], 1},
-			util.FmtElement{[]byte("B")[0], 1},
-			util.FmtElement{[]byte("S")[0], 1},
+			{[]byte("B")[0], 1},
+			{[]byte("B")[0], 1},
+			{[]byte("S")[0], 1},
 		}},
 		{"B13", []util.FmtElement{
-			util.FmtElement{[]byte("B")[0], 13},
+			{[]byte("B")[0], 13},
 		}},
 		{"S4D1B", []util.FmtElement{
-			util.FmtElement{[]byte("S")[0], 4},
-			util.FmtElement{[]byte("D")[0], 1},
-			util.FmtElement{[]byte("B")[0], 1},
+			{[]byte("S")[0], 4},
+			{[]byte("D")[0], 1},
+			{[]byte("B")[0], 1},
 		}},
 		{"L7D90B32", []util.FmtElement{
-			util.FmtElement{[]byte("L")[0], 7},
-			util.FmtElement{[]byte("D")[0], 90},
-			util.FmtElement{[]byte("B")[0], 32},
+			{[]byte("L")[0], 7},
+			{[]byte("D")[0], 90},
+			{[]byte("B")[0], 32},
 		}},
 		{"SSSS", []util.FmtElement{
-			util.FmtElement{[]byte("S")[0], 1},
-			util.FmtElement{[]byte("S")[0], 1},
-			util.FmtElement{[]byte("S")[0], 1},
-			util.FmtElement{[]byte("S")[0], 1},
+			{[]byte("S")[0], 1},
+			{[]byte("S")[0], 1},
+			{[]byte("S")[0], 1},
+			{[]byte("S")[0], 1},
 		}},
 		{"D1000", []util.FmtElement{
-			util.FmtElement{[]byte("D")[0], 1000},
+			{[]byte("D")[0], 1000},
 		}},
 		{"TTS", []util.FmtElement{
-			util.FmtElement{[]byte("T")[0], 1},
-			util.FmtElement{[]byte("T")[0], 1},
-			util.FmtElement{[]byte("S")[0], 1},
+			{[]byte("T")[0], 1},
+			{[]byte("T")[0], 1},
+			{[]byte("S")[0], 1},
 		}},
 	}
 	for _, test := range tests {
