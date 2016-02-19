@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"image"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -24,6 +24,7 @@ func main() {
 	ppr := flag.Bool("pprof", false, "starts pprof debug server on :8080")
 	mutex := flag.Bool("mutex", false, "trace mutexes for debugging")
 	port := flag.Uint64("port", 19132, "sets server port to given value")
+	img := flag.String("img", "none", "use experimental image chunk creator with given image")
 	flag.Parse()
 
 	if *ppr {
@@ -49,7 +50,7 @@ func main() {
 
 	start := time.Now()
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	initLevel(5)
+	initLevel(5, *img)
 	initRaknet()
 	startLevel()
 	startRouter(uint16(*port))
@@ -59,8 +60,29 @@ func main() {
 	command.HandleCommand()
 }
 
-func initLevel(genRadius int32) {
-	g := new(gen.SampleGenerator)
+func initLevel(genRadius int32, img string) {
+	var g gen.Generator
+	if img != "none" {
+		file, err := os.Open(img)
+		if err != nil {
+			log.Fatal("Error while opening image:", err)
+		}
+		cfg, _, err := image.DecodeConfig(file)
+		if err != nil {
+			log.Fatal("Error while decoding image:", err)
+		}
+		img, _, err := image.Decode(file)
+		if err != nil {
+			log.Fatal("Error while loading image:", err)
+		}
+		g = &gen.ImageGenerator{
+			Image:  img,
+			Width:  int32(cfg.Width),
+			Height: int32(cfg.Height),
+		}
+	} else {
+		g = new(gen.SampleGenerator)
+	}
 	log.Println("Generator type:", reflect.TypeOf(g))
 	g.Init()
 	log.Println("Generator init done. Initializing level...")
@@ -103,8 +125,7 @@ func startRouter(port uint16) {
 	var r *raknet.Router
 	var err error
 	if r, err = raknet.CreateRouter(lav7.RegisterPlayer, lav7.UnregisterPlayer, port); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+		log.Fatal("Error while creating router:", err)
 	}
 	r.Start()
 }
