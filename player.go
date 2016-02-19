@@ -40,6 +40,8 @@ type Player struct {
 	chunkBusy    bool
 	chunkStop    chan struct{}
 
+	inventory PlayerInventory
+
 	recvChan     chan *buffer.Buffer
 	raknetChan   chan<- *raknet.EncapsulatedPacket
 	callbackChan chan PlayerCallback
