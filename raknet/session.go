@@ -270,7 +270,7 @@ func (s *Session) handleEncapsulated(ep *EncapsulatedPacket) {
 }
 
 func (s *Session) connComplete() {
-	if s.Status < 3 {
+	if s.Status != 3 {
 		return
 	}
 	s.packetChan = s.playerAdder(s.Address)
@@ -346,7 +346,9 @@ func (s *Session) Close(reason string) {
 	s.playerRemover(s.Address)
 	data := &EncapsulatedPacket{Buffer: buffer.FromBytes([]byte{0x15})}
 	s.sendEncapsulatedDirect(data)
-	close(s.packetChan)
+	if s.Status >= 3 {
+		close(s.packetChan)
+	}
 	blockLock.Lock()
 	defer blockLock.Unlock()
 	blockList[s.Address.String()] = time.Now().Add(time.Second + time.Millisecond*500)
