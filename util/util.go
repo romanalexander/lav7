@@ -3,6 +3,7 @@ package util
 
 import (
 	"reflect"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
@@ -58,6 +59,13 @@ func GetSortedKeys(m interface{}) []int {
 	}
 	sort.Ints(keys)
 	return keys
+}
+
+// GetTrace returns stack trace for all goroutines.
+func GetTrace() string {
+	var b [1024 * 1024 * 16]byte
+	n := runtime.Stack(b[:], true)
+	return string(b[:n])
 }
 
 // Suspend is a dumb funciton which will make program run forever - hangs current goroutine.

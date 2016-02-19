@@ -63,7 +63,7 @@ type Session struct {
 	ackQueue     map[uint32]bool
 	nackQueue    map[uint32]bool
 	recovery     map[uint32]*DataPacket
-	recoveryLock *sync.Mutex
+	recoveryLock util.Locker
 
 	packetWindow   map[uint32]bool
 	windowBorder   [2]uint32 // Window range: [windowBorder[0], windowBorder[1])
@@ -96,7 +96,7 @@ func (s *Session) Init(address *net.UDPAddr) {
 	s.ackQueue = make(map[uint32]bool)
 	s.nackQueue = make(map[uint32]bool)
 	s.recovery = make(map[uint32]*DataPacket)
-	s.recoveryLock = new(sync.Mutex)
+	s.recoveryLock = util.NewMutex()
 	s.packetWindow = make(map[uint32]bool)
 	s.reliableWindow = make(map[uint32]*EncapsulatedPacket)
 	s.splitTable = make(map[uint16]map[uint32][]byte)

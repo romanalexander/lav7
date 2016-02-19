@@ -1,6 +1,6 @@
 package types
 
-import "sync"
+import "github.com/L7-MCPE/lav7/util"
 
 // ChunkDelivery is a type for passing full chunk data to players.
 type ChunkDelivery struct {
@@ -19,7 +19,7 @@ type Chunk struct {
 	SkyLightData [16 * 16 * 64]byte // Nibbles
 	HeightMap    [16 * 16]byte
 	BiomeData    [16 * 16 * 4]byte // Uints
-	mutex        *sync.RWMutex
+	mutex        util.RWLocker
 }
 
 // FallbackChunk is a chunk to be returned if level provider fails to load chunk from file.
@@ -149,9 +149,9 @@ func (c *Chunk) PopulateHeight() {
 }
 
 // Mutex returns chunk's RW mutex.
-func (c *Chunk) Mutex() *sync.RWMutex {
+func (c *Chunk) Mutex() util.RWLocker {
 	if c.mutex == nil {
-		c.mutex = new(sync.RWMutex)
+		c.mutex = util.NewRWMutex()
 	}
 	return c.mutex
 }

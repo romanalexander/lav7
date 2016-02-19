@@ -3,27 +3,52 @@ package lav7
 import (
 	"fmt"
 	"log"
-	"sync"
+	"time"
 
 	"github.com/L7-MCPE/lav7/format"
 	"github.com/L7-MCPE/lav7/types"
+	"github.com/L7-MCPE/lav7/util"
 )
 
+const tickDuration = time.Millisecond * 50
+
+// Level is a struct for processing MCPE worlds.
 type Level struct {
 	format.Provider
 	Name string
 
 	ChunkMap   map[[2]int32]*types.Chunk
-	ChunkMutex *sync.Mutex
+	ChunkMutex util.Locker
 	Gen        func(int32, int32) *types.Chunk
+
+	Ticker *time.Ticker
+	Stop   chan struct{}
 }
 
 // Init initializes the level.
 func (lv *Level) Init(pv format.Provider) {
 	lv.Provider = pv
 	lv.ChunkMap = make(map[[2]int32]*types.Chunk)
-	lv.ChunkMutex = new(sync.Mutex)
+	lv.ChunkMutex = util.NewMutex()
+	lv.Ticker = time.NewTicker(tickDuration)
+	lv.Stop = make(chan struct{}, 1)
 	pv.Init(lv.Name)
+}
+
+// Process receives signals from two channels, Ticker.C and Stop.
+func (lv *Level) Process() {
+	for {
+		select {
+		case <-lv.Ticker.C:
+			lv.tick()
+		case <-lv.Stop:
+			return
+		}
+	}
+}
+
+func (lv *Level) tick() {
+
 }
 
 // OnUseItem handles UseItemPacket and determines position to update block position.
@@ -61,6 +86,7 @@ func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (cancele
 	return
 }
 
+// ChunkExists returns if the chunk is loaded on the given chunk coordinates.
 func (lv *Level) ChunkExists(cx, cz int32) bool {
 	lv.ChunkMutex.Lock()
 	_, ok := lv.ChunkMap[[2]int32{cx, cz}]
@@ -68,6 +94,11 @@ func (lv *Level) ChunkExists(cx, cz int32) bool {
 	return ok
 }
 
+// GetChunk returns types.Chunk reference with given chunk coordinates.
+// If the chunk is not loaded, this will try to load a chunk from Provider.
+//
+// If Provider fails to load the chunk,
+// this will return a new created chunk from generator only if create is true; otherwise nil.
 func (lv *Level) GetChunk(cx, cz int32, create bool) *types.Chunk {
 	lv.ChunkMutex.Lock()
 	defer lv.ChunkMutex.Unlock()
@@ -83,14 +114,17 @@ func (lv *Level) GetChunk(cx, cz int32, create bool) *types.Chunk {
 		}
 		lv.SetChunk(cx, cz, c)
 		return c
-	} else {
+	} else if create {
 		c := lv.Gen(cx, cz)
 		lv.SetChunk(cx, cz, c)
 		return c
 	}
+	return nil
 }
 
-func (lv *Level) SetChunk(cx, cz int32, c *types.Chunk) { // Should lock ChunkMutex before call
+// SetChunk sets given chunk to chunk map.
+// Callers should lock ChunkMutex before call.
+func (lv *Level) SetChunk(cx, cz int32, c *types.Chunk) {
 	// lv.ChunkMutex.Lock()
 	// defer lv.ChunkMutex.Unlock()
 	if _, ok := lv.ChunkMap[[2]int32{cx, cz}]; ok {
@@ -99,7 +133,11 @@ func (lv *Level) SetChunk(cx, cz int32, c *types.Chunk) { // Should lock ChunkMu
 	lv.ChunkMap[[2]int32{cx, cz}] = c
 }
 
-func (lv *Level) UnloadChunk(cx, cz int32, save bool) error { // Should lock ChunkMutex before call
+// UnloadChunk unloads chunk from memory.
+// If save is given true, this will save the chunk before unload.
+//
+// Callers should lock ChunkMutex before call.
+func (lv *Level) UnloadChunk(cx, cz int32, save bool) error {
 	if c, ok := lv.ChunkMap[[2]int32{cx, cz}]; ok {
 		delete(lv.ChunkMap, [2]int32{cx, cz})
 		if save {
@@ -110,6 +148,7 @@ func (lv *Level) UnloadChunk(cx, cz int32, save bool) error { // Should lock Chu
 	return fmt.Errorf("Chunk %d:%d is not loaded", cx, cz)
 }
 
+// Save saves all loaded chunks on memory.
 func (lv *Level) Save() {
 	lv.ChunkMutex.Lock()
 	defer lv.ChunkMutex.Unlock()
@@ -157,9 +196,3 @@ func (lv Level) Set(x, y, z int32, block types.Block) {
 	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), block.ID)
 	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), block.Meta)
 }
-
-func (lv Level) GetTime() uint16 {
-	return 0
-}
-
-func (lv Level) SetTime(t uint16) {}
