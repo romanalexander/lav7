@@ -74,9 +74,15 @@ func initLevel(genRadius int32) {
 	chunks := int((genRadius*2 + 1) * (genRadius*2 + 1))
 	wg := new(sync.WaitGroup)
 	wg.Add(chunks)
+	level := lav7.GetDefaultLevel()
 	for x := -genRadius; x <= genRadius; x++ {
 		for z := -genRadius; z <= genRadius; z++ {
-			go func(x, z int32) { lav7.GetDefaultLevel().GetChunk(x, z, true); wg.Done() }(x, z)
+			go func(x, z int32) {
+				if level.GetChunk(x, z) == nil {
+					<-level.CreateChunk(x, z)
+				}
+				wg.Done()
+			}(x, z)
 		}
 	}
 	wg.Wait()

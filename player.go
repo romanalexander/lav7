@@ -35,10 +35,11 @@ type Player struct {
 
 	playerShown map[uint64]struct{}
 
-	sentChunks   map[[2]int32]struct{}
+	fastChunks   map[[2]int32]*types.Chunk
 	chunkRequest chan [2]int32
 	chunkBusy    bool
 	chunkStop    chan struct{}
+	chunkNotify  chan types.ChunkDelivery
 
 	inventory PlayerInventory
 
@@ -53,7 +54,10 @@ type Player struct {
 }
 
 func (p *Player) process() {
-	radius := int32(3)
+	radius := int32(4)
+	pending := make(map[[2]int32]struct{})
+	p.chunkRequest = make(chan [2]int32, (radius*2+1)*(radius*2+1))
+	go p.updateChunk()
 	for {
 		select {
 		case buf, ok := <-p.recvChan:
@@ -65,27 +69,65 @@ func (p *Player) process() {
 			callback.Call(p, callback.Arg)
 		case <-p.updateTicker.C:
 			cx, cz := int32(p.Position.X)>>4, int32(p.Position.Z)>>4
-			for sx := cx - radius; sx <= cx+radius; sx++ {
-				for sz := cz - radius; sz <= cz+radius; sz++ {
-					p.chunkRequest <- [2]int32{sx, sz}
+			chunkHold := make(map[[2]int32]struct{})
+			for ccx := cx - radius; ccx <= cx+radius; ccx++ {
+				for ccz := cz - radius; ccz <= cz+radius; ccz++ {
+					chunkHold[[2]int32{ccx, ccz}] = struct{}{}
 				}
 			}
+			for cc := range p.fastChunks {
+				if _, ok := chunkHold[cc]; ok {
+					delete(chunkHold, cc)
+				} else {
+					delete(p.fastChunks, cc)
+					log.Printf("Unload fastchunk: %d %d", cc[0], cc[1])
+				}
+			}
+			for cc := range chunkHold {
+				if _, ok := pending[cc]; !ok {
+					go func(cc [2]int32) {
+						p.chunkRequest <- cc
+					}(cc)
+					pending[cc] = struct{}{}
+				}
+			}
+		case c := <-p.chunkNotify:
+			log.Printf("Chunk notify on %d %d", c.X, c.Z)
+			if _, ok := p.fastChunks[[2]int32{c.X, c.Z}]; ok {
+				break
+			}
+			p.fastChunks[[2]int32{c.X, c.Z}] = c.Chunk
+			delete(pending, [2]int32{c.X, c.Z})
+			p.sendChunk(c)
 		}
 	}
 }
 
 // NOTE: Do NOT execute. This is an internal function.
 func (p *Player) updateChunk() {
-	p.sentChunks = make(map[[2]int32]struct{})
 	for {
 		select {
 		case <-p.chunkStop:
 			return
 		case req := <-p.chunkRequest:
-			if _, ok := p.sentChunks[[2]int32{req[0], req[1]}]; !ok {
-				go p.sendChunk(req[0], req[1], p.Level.GetChunk(req[0], req[1], true))
-				p.sentChunks[req] = struct{}{}
+			log.Printf("Got chunk request: %d %d", req[0], req[1])
+			if c := p.Level.GetChunk(req[0], req[1]); c != nil {
+				log.Printf("%d %d is loaded: notifying", req[0], req[1])
+				p.chunkNotify <- types.ChunkDelivery{
+					X:     req[0],
+					Z:     req[1],
+					Chunk: c,
+				}
+				continue
 			}
+			go func(cx, cz int32, done <-chan struct{}) {
+				<-done
+				p.chunkNotify <- types.ChunkDelivery{
+					X:     cx,
+					Z:     cz,
+					Chunk: p.Level.GetChunk(cx, cz),
+				}
+			}(req[0], req[1], p.Level.CreateChunk(req[0], req[1]))
 		}
 	}
 }
@@ -151,6 +193,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 			Y:         65,
 			Z:         0,
 		})
+		p.Position = util.Vector3{X: 0, Y: 65, Z: 0}
 		p.loggedIn = true
 
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
@@ -247,15 +290,15 @@ func (p *Player) SendMessage(msg string) {
 }
 
 //NOTE: This function is NOT goroutine-safe. Only for internal use.
-func (p *Player) sendChunk(chunkX, chunkZ int32, c *types.Chunk) {
-	c.Mutex().RLock()
+func (p *Player) sendChunk(c types.ChunkDelivery) {
+	c.Chunk.Mutex().RLock()
 	i := &FullChunkData{
-		ChunkX:  uint32(chunkX),
-		ChunkZ:  uint32(chunkZ),
+		ChunkX:  uint32(c.X),
+		ChunkZ:  uint32(c.Z),
 		Order:   OrderLayered,
-		Payload: c.FullChunkData(),
+		Payload: c.Chunk.FullChunkData(),
 	}
-	c.Mutex().RUnlock()
+	c.Chunk.Mutex().RUnlock()
 	p.SendCompressed(i)
 }
 

@@ -18,6 +18,7 @@ type Level struct {
 	Name string
 
 	ChunkMap   map[[2]int32]*types.Chunk
+	TaskMap    map[[2]int32]struct{}
 	ChunkMutex util.Locker
 	Gen        func(int32, int32) *types.Chunk
 
@@ -29,6 +30,7 @@ type Level struct {
 func (lv *Level) Init(pv format.Provider) {
 	lv.Provider = pv
 	lv.ChunkMap = make(map[[2]int32]*types.Chunk)
+	lv.TaskMap = make(map[[2]int32]struct{})
 	lv.ChunkMutex = util.NewMutex()
 	lv.Ticker = time.NewTicker(tickDuration)
 	lv.Stop = make(chan struct{}, 1)
@@ -96,12 +98,11 @@ func (lv *Level) ChunkExists(cx, cz int32) bool {
 	return ok
 }
 
-// GetChunk returns types.Chunk reference with given chunk coordinates.
+// GetChunk returns *types.Chunk from ChunkMap with given chunk coordinates.
 // If the chunk is not loaded, this will try to load a chunk from Provider.
 //
-// If Provider fails to load the chunk,
-// this will return a new created chunk from generator only if create is true; otherwise nil.
-func (lv *Level) GetChunk(cx, cz int32, create bool) *types.Chunk {
+// If Provider fails to load the chunk, this function will return nil.
+func (lv *Level) GetChunk(cx, cz int32) *types.Chunk {
 	lv.ChunkMutex.Lock()
 	defer lv.ChunkMutex.Unlock()
 	if c, ok := lv.ChunkMap[[2]int32{cx, cz}]; ok {
@@ -114,10 +115,6 @@ func (lv *Level) GetChunk(cx, cz int32, create bool) *types.Chunk {
 			c = new(types.Chunk)
 			*c = types.FallbackChunk
 		}
-		lv.SetChunk(cx, cz, c)
-		return c
-	} else if create {
-		c := lv.Gen(cx, cz)
 		lv.SetChunk(cx, cz, c)
 		return c
 	}
@@ -133,6 +130,27 @@ func (lv *Level) SetChunk(cx, cz int32, c *types.Chunk) {
 		panic("Tried to overwrite existing chunk!")
 	}
 	lv.ChunkMap[[2]int32{cx, cz}] = c
+}
+
+// CreateChunk generates chunk asynchronously.
+func (lv *Level) CreateChunk(cx, cz int32) <-chan struct{} {
+	lv.ChunkMutex.Lock()
+	if _, ok := lv.TaskMap[[2]int32{cx, cz}]; ok {
+		lv.ChunkMutex.Unlock()
+		return nil
+	}
+	lv.TaskMap[[2]int32{cx, cz}] = struct{}{}
+	lv.ChunkMutex.Unlock()
+	done := make(chan struct{}, 1)
+	go func(done chan<- struct{}) {
+		c := lv.Gen(cx, cz)
+		log.Println("Generated on", cx, cz)
+		lv.ChunkMutex.Lock()
+		lv.SetChunk(cx, cz, c)
+		lv.ChunkMutex.Unlock()
+		done <- struct{}{}
+	}(done)
+	return done
 }
 
 // UnloadChunk unloads chunk from memory.
@@ -158,35 +176,35 @@ func (lv *Level) Save() {
 }
 
 func (lv Level) GetBlock(x, y, z int32) byte {
-	c := lv.GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4)
 	c.Mutex().RLock()
 	defer c.Mutex().RUnlock()
 	return c.GetBlock(byte(x&0xf), byte(y), byte(z&0xf))
 }
 
 func (lv *Level) SetBlock(x, y, z int32, b byte) {
-	c := lv.GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4)
 	c.Mutex().Lock()
 	defer c.Mutex().Unlock()
 	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), b)
 }
 
 func (lv Level) GetBlockMeta(x, y, z int32) byte {
-	c := lv.GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4)
 	c.Mutex().RLock()
 	defer c.Mutex().RUnlock()
 	return c.GetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf))
 }
 
 func (lv *Level) SetBlockMeta(x, y, z int32, b byte) {
-	c := lv.GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4)
 	c.Mutex().Lock()
 	defer c.Mutex().Unlock()
 	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), b)
 }
 
 func (lv Level) Get(x, y, z int32) types.Block {
-	c := lv.GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4)
 	return types.Block{
 		ID:   c.GetBlock(byte(x&0xf), byte(y), byte(z&0xf)),
 		Meta: c.GetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf)),
@@ -194,7 +212,7 @@ func (lv Level) Get(x, y, z int32) types.Block {
 }
 
 func (lv Level) Set(x, y, z int32, block types.Block) {
-	c := lv.GetChunk(x>>4, z>>4, true)
+	c := lv.GetChunk(x>>4, z>>4)
 	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), block.ID)
 	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), block.Meta)
 }

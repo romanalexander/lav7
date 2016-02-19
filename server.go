@@ -11,6 +11,7 @@ import (
 
 	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
+	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
@@ -33,15 +34,17 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
 	p.callbackChan = make(chan PlayerCallback, 128)
 	p.updateTicker = time.NewTicker(time.Millisecond * 500)
+
+	p.fastChunks = make(map[[2]int32]*types.Chunk)
 	p.chunkStop = make(chan struct{}, 1)
 	p.chunkRequest = make(chan [2]int32, 32)
+	p.chunkNotify = make(chan types.ChunkDelivery, 16)
 
 	iteratorLock.Lock()
 	Players[identifier] = p
 	iteratorLock.Unlock()
 	atomic.AddInt32(&raknet.OnlinePlayers, 1)
 	go p.process()
-	go p.updateChunk()
 	return ch
 }
 
