@@ -145,7 +145,6 @@ func (lv *Level) CreateChunk(cx, cz int32) <-chan struct{} {
 	done := make(chan struct{}, 1)
 	go func(done chan<- struct{}) {
 		c := lv.Gen(cx, cz)
-		log.Println("Generated on", cx, cz)
 		lv.ChunkMutex.Lock()
 		lv.SetChunk(cx, cz, c)
 		lv.ChunkMutex.Unlock()

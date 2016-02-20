@@ -1,9 +1,8 @@
 package gen
 
 import (
-	"image"
-
 	"github.com/L7-MCPE/lav7/types"
+	"image"
 )
 
 type ImageGenerator struct {
@@ -30,33 +29,33 @@ func (s *ImageGenerator) Init() {
 func (s *ImageGenerator) Gen(x, z int32) *types.Chunk {
 	chunk := new(types.Chunk)
 	chunk.CopyFrom(s.Cache)
-
 	blockX, blockZ := x<<4, z<<4
-	imgX := int32(blockX/s.Width) * s.Width
-	imgZ := int32(blockZ/s.Height) * s.Height
+	imgStartX := int32(blockX/s.Width) * s.Width
+	imgStartZ := int32(blockZ/s.Height) * s.Height
 
 	if x < 0 {
-		imgX += s.Width
+		imgStartX -= s.Width
 	}
 
 	if z < 0 {
-		imgZ += s.Height
+		imgStartZ -= s.Height
 	}
 
 	for x := byte(0); x < 16; x++ {
 		for z := byte(0); z < 16; z++ {
-			tx, tz := imgX+int32(x), imgZ+int32(z)
-			if tx >= s.Width {
-				tx -= s.Width
-			}
-			if tz >= s.Height {
-				tz -= s.Height
-			}
-			rgb := s.Image.At(int(tx), int(tz))
+			ix, iz := s.getImageXZ(blockX+int32(x), blockZ+int32(z), imgStartX, imgStartZ)
+			rgb := s.Image.At(int(ix), int(iz))
 			r, g, b, _ := rgb.RGBA()
-			chunk.SetBiomeColor(x, z, byte(r>>24), byte(g>>24), byte(b>>24))
+			chunk.SetBiomeColor(x, z, byte(r>>8), byte(g>>8), byte(b>>8))
 		}
 	}
 
 	return chunk
+}
+
+func (s *ImageGenerator) getImageXZ(bx, bz, isx, isz int32) (int32, int32) {
+	diffX, diffZ := bx-isx, bz-isz
+	diffX %= s.Width
+	diffZ %= s.Height
+	return diffX, diffZ
 }

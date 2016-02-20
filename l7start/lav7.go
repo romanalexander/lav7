@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -63,15 +68,23 @@ func main() {
 func initLevel(genRadius int32, img string) {
 	var g gen.Generator
 	if img != "none" {
+		log.Print("* Using EXPERIMENTAL image chunk generator")
 		file, err := os.Open(img)
 		if err != nil {
 			log.Fatal("Error while opening image:", err)
 		}
-		cfg, _, err := image.DecodeConfig(file)
+		buf := new(bytes.Buffer)
+		io.Copy(buf, file)
+		bs := buf.Bytes()
+		cfg, format, err := image.DecodeConfig(buf)
 		if err != nil {
 			log.Fatal("Error while decoding image:", err)
 		}
-		img, _, err := image.Decode(file)
+		log.Printf("* Image size: %d * %d, format detected: %s", cfg.Width, cfg.Height, format)
+		if cfg.Width < 16 || cfg.Height < 16 {
+			log.Fatal("Fatal: Image size should be bigger than 16*16.")
+		}
+		img, _, err := image.Decode(bytes.NewBuffer(bs))
 		if err != nil {
 			log.Fatal("Error while loading image:", err)
 		}
