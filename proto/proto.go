@@ -58,12 +58,19 @@ const (
 	CraftingEventHead
 	AdventureSettingsHead
 	BlockEntityDataHead
-	_ // 0xbe is skipped
+	_ // 0xbe is skipped: PlayerInput
 	FullChunkDataHead
 	SetDifficultyHead
-	_ // 0xc1 is skipped
+	_ // 0xc1 is skipped: ChangeDimension
 	SetPlayerGametypeHead
 	PlayerListHead
+	_ // TelemetryEvent
+	_ // SpawnExperienceOrb
+	_ // ClientboundMapItemData
+	_ // MapInfoRequest
+	_ // ChunkRadiusUpdate
+	_ // ItemFrameDrop
+	_ // ReplaceSelectedItem
 )
 
 var packets = map[byte]Packet{

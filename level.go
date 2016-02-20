@@ -42,7 +42,8 @@ func (lv *Level) Process() {
 	for {
 		select {
 		case <-lv.Ticker.C:
-			lv.tick()
+			return
+			//lv.tick()
 		case <-lv.Stop:
 			return
 		}

@@ -55,7 +55,7 @@ type Player struct {
 
 func (p *Player) process() {
 	radius := int32(4)
-	pending := make(map[[2]int32]struct{})
+	pending := make(map[[2]int32]time.Time)
 	p.chunkRequest = make(chan [2]int32, (radius*2+1)*(radius*2+1))
 	go p.updateChunk()
 	for {
@@ -84,15 +84,14 @@ func (p *Player) process() {
 				}
 			}
 			for cc := range chunkHold {
-				if _, ok := pending[cc]; !ok {
+				if timeout, ok := pending[cc]; !ok || timeout.Before(time.Now()) {
 					go func(cc [2]int32) {
 						p.chunkRequest <- cc
 					}(cc)
-					pending[cc] = struct{}{}
+					pending[cc] = time.Now().Add(time.Second * 5)
 				}
 			}
 		case c := <-p.chunkNotify:
-			log.Printf("Chunk notify on %d %d", c.X, c.Z)
 			if _, ok := p.fastChunks[[2]int32{c.X, c.Z}]; ok {
 				break
 			}
@@ -110,9 +109,7 @@ func (p *Player) updateChunk() {
 		case <-p.chunkStop:
 			return
 		case req := <-p.chunkRequest:
-			log.Printf("Got chunk request: %d %d", req[0], req[1])
 			if c := p.Level.GetChunk(req[0], req[1]); c != nil {
-				log.Printf("%d %d is loaded: notifying", req[0], req[1])
 				p.chunkNotify <- types.ChunkDelivery{
 					X:     req[0],
 					Z:     req[1],
