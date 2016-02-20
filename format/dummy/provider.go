@@ -1,8 +1,9 @@
-// Package dummy provides an example for writing level format provider.
-//
-// This format saves each chunk in separate file, writing raw block id/meta/height map/skylight data, etc.
-// Use of this format in production server is not recommended.
+/*
+ Package dummy provides an example for writing level format provider.
 
+ This format saves each chunk in separate file, writing raw block id/meta/height map/skylight data, etc.
+ Use of this format in production server is not recommended.
+*/
 package dummy
 
 import (
@@ -82,6 +83,8 @@ func (dm *Dummy) WriteChunk(cx, cz int32, c *types.Chunk) error {
 		return err
 	}
 	buf := new(buffer.Buffer)
+	c.Mutex().Lock()
+	defer c.Mutex().Unlock()
 	buf.BatchWrite(c.BlockData[:], c.MetaData[:], c.LightData[:], c.SkyLightData[:], c.HeightMap[:], c.BiomeData[:])
 	if err := ioutil.WriteFile(path, buf.Done(), 0644); err != nil {
 		return err
