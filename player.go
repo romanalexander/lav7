@@ -13,6 +13,8 @@ import (
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
+const radius int32 = 5
+
 type PlayerCallback struct {
 	Call func(*Player, interface{})
 	Arg  interface{}
@@ -40,6 +42,7 @@ type Player struct {
 	chunkBusy    bool
 	chunkStop    chan struct{}
 	chunkNotify  chan types.ChunkDelivery
+	pending      map[[2]int32]time.Time
 
 	inventory PlayerInventory
 
@@ -54,8 +57,7 @@ type Player struct {
 }
 
 func (p *Player) process() {
-	radius := int32(4)
-	pending := make(map[[2]int32]time.Time)
+	p.pending = make(map[[2]int32]time.Time)
 	p.chunkRequest = make(chan [2]int32, (radius*2+1)*(radius*2+1))
 	go p.updateChunk()
 	for {
@@ -84,11 +86,8 @@ func (p *Player) process() {
 				}
 			}
 			for cc := range chunkHold {
-				if timeout, ok := pending[cc]; !ok || timeout.Before(time.Now()) {
-					go func(cc [2]int32) {
-						p.chunkRequest <- cc
-					}(cc)
-					pending[cc] = time.Now().Add(time.Second * 5)
+				if timeout, ok := p.pending[cc]; !ok || timeout.Before(time.Now()) {
+					p.requestChunk(cc)
 				}
 			}
 		case c := <-p.chunkNotify:
@@ -96,10 +95,18 @@ func (p *Player) process() {
 				break
 			}
 			p.fastChunks[[2]int32{c.X, c.Z}] = c.Chunk
-			delete(pending, [2]int32{c.X, c.Z})
+			delete(p.pending, [2]int32{c.X, c.Z})
 			p.sendChunk(c)
 		}
 	}
+}
+
+// NOTE: Do NOT execute outside player process goroutine.
+func (p *Player) requestChunk(cc [2]int32) {
+	go func(cc [2]int32) {
+		p.chunkRequest <- cc
+	}(cc)
+	p.pending[cc] = time.Now().Add(time.Second * 5)
 }
 
 // NOTE: Do NOT execute. This is an internal function.
@@ -399,6 +406,12 @@ func (p *Player) firstSpawn() {
 			Skin:     pl.Skin,
 		})
 	})
+
+	for cx := int32(p.Position.X) - radius; cx <= int32(p.Position.X)+radius; cx++ {
+		for cz := int32(p.Position.Z) - radius; cz <= int32(p.Position.Z)+radius; cz++ {
+			p.requestChunk([2]int32{cx, cz})
+		}
+	}
 
 	p.SendPacket(&PlayerList{
 		Type:          PlayerListAdd,
