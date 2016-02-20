@@ -1,7 +1,13 @@
 // Package lav7 is not only a lightweight Minecraft:PE server, but provides Minecraft:PE protocol/gameplay mechanics.
 package lav7
 
-import "sync"
+import (
+	"reflect"
+	"strings"
+	"sync"
+
+	"github.com/L7-MCPE/lav7/format"
+)
 
 const (
 	// Version is a version of this server.
@@ -29,4 +35,23 @@ var LastEntityID uint64
 var levels = map[string]*Level{
 	defaultLvl: {Name: "dummy"},
 }
+
+var levelProviders = map[string]format.Provider{}
+
 var defaultLvl = "default"
+
+func RegisterProvider(provider format.Provider) {
+	typname := reflect.TypeOf(provider)
+	typsl := strings.Split(typname.String(), ".")
+	name := strings.ToLower(typsl[len(typsl)-1])
+	if _, ok := levelProviders[name]; !ok {
+		levelProviders[name] = provider
+	}
+}
+
+func GetProvider(name string) format.Provider {
+	if pv, ok := levelProviders[name]; ok {
+		return pv
+	}
+	return nil
+}

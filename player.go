@@ -59,6 +59,8 @@ type Player struct {
 func (p *Player) process() {
 	p.pending = make(map[[2]int32]time.Time)
 	p.chunkRequest = make(chan [2]int32, (radius*2+1)*(radius*2+1))
+	resendTicker := time.NewTicker(time.Second * 3)
+	defer resendTicker.Stop()
 	go p.updateChunk()
 	for {
 		select {
@@ -82,7 +84,6 @@ func (p *Player) process() {
 					delete(chunkHold, cc)
 				} else {
 					delete(p.fastChunks, cc)
-					log.Printf("Unload fastchunk: %d %d", cc[0], cc[1])
 				}
 			}
 			for cc := range chunkHold {
@@ -97,6 +98,12 @@ func (p *Player) process() {
 			p.fastChunks[[2]int32{c.X, c.Z}] = c.Chunk
 			delete(p.pending, [2]int32{c.X, c.Z})
 			p.sendChunk(c)
+		case <-resendTicker.C:
+			for cx := int32(p.Position.X) - radius; cx <= int32(p.Position.X)+radius; cx++ {
+				for cz := int32(p.Position.Z) - radius; cz <= int32(p.Position.Z)+radius; cz++ {
+					p.requestChunk([2]int32{cx, cz})
+				}
+			}
 		}
 	}
 }

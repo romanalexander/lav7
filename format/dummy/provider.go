@@ -1,3 +1,8 @@
+// Package dummy provides an example for writing level format provider.
+//
+// This format saves each chunk in separate file, writing raw block id/meta/height map/skylight data, etc.
+// Use of this format in production server is not recommended.
+
 package dummy
 
 import (
@@ -7,26 +12,32 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
-type Provider struct {
+func init() {
+	lav7.RegisterProvider(new(Dummy))
+}
+
+type Dummy struct {
 	Name string
 }
 
-func (pv *Provider) Init(name string) {
-	pv.Name = name
+func (dm *Dummy) Init(name string) {
+	dm.Name = name
 }
 
-func (pv *Provider) Loadable(cx, cz int32) (path string, ok bool) {
+func (dm *Dummy) Loadable(cx, cz int32) (path string, ok bool) {
 	var err error
-	path, err = filepath.Abs("levels/" + pv.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw")
+	path, err = filepath.Abs("levels/" + dm.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw")
 	if err != nil {
 		ok = false
 		return
 	}
 	f, err := os.Open(path)
+	defer f.Close()
 	if err != nil {
 		ok = false
 		return
@@ -40,7 +51,7 @@ func (pv *Provider) Loadable(cx, cz int32) (path string, ok bool) {
 	return
 }
 
-func (pv *Provider) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err error) {
+func (dm *Dummy) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err error) {
 	var f *os.File
 	f, err = os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
@@ -65,8 +76,8 @@ func (pv *Provider) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, er
 
 }
 
-func (pv *Provider) WriteChunk(cx, cz int32, c *types.Chunk) error {
-	path, _ := filepath.Abs("levels/" + pv.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw")
+func (dm *Dummy) WriteChunk(cx, cz int32, c *types.Chunk) error {
+	path, _ := filepath.Abs("levels/" + dm.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw")
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
@@ -78,10 +89,10 @@ func (pv *Provider) WriteChunk(cx, cz int32, c *types.Chunk) error {
 	return nil
 }
 
-func (pv *Provider) SaveAll(chunks map[[2]int32]*types.Chunk) error {
+func (dm *Dummy) SaveAll(chunks map[[2]int32]*types.Chunk) error {
 	errstr := ""
 	for k, c := range chunks {
-		if err := pv.WriteChunk(k[0], k[1], c); err != nil {
+		if err := dm.WriteChunk(k[0], k[1], c); err != nil {
 			fmt.Sprintln(errstr, err.Error())
 		}
 	}

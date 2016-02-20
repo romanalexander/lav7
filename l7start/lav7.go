@@ -19,7 +19,7 @@ import (
 
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/command"
-	"github.com/L7-MCPE/lav7/format/dummy"
+	_ "github.com/L7-MCPE/lav7/format/dummy"
 	"github.com/L7-MCPE/lav7/gen"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util"
@@ -99,7 +99,7 @@ func initLevel(genRadius int32, img string) {
 	log.Println("Generator type:", reflect.TypeOf(g))
 	g.Init()
 	log.Println("Generator init done. Initializing level...")
-	p := new(dummy.Provider)
+	p := lav7.GetProvider("dummy")
 	p.Init(lav7.GetDefaultLevel().Name)
 	lav7.GetDefaultLevel().Init(p)
 	lav7.GetDefaultLevel().Gen = g.Gen
