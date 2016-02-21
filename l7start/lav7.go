@@ -61,7 +61,7 @@ func main() {
 	} else {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
-	initLevel(5, *img, *fmt)
+	initLevel(5, *img, *format)
 	initRaknet()
 	startLevel()
 	startRouter(uint16(*port))
@@ -105,8 +105,8 @@ func initLevel(genRadius int32, img string, format string) {
 	log.Println("Generator type:", reflect.TypeOf(g))
 	g.Init()
 	log.Println("Generator init done. Initializing level...")
-	log.Println("Level format type:", fmt)
-	p := lav7.GetProvider(fmt)
+	log.Println("Level format type:", format)
+	p := lav7.GetProvider(format)
 	if p == nil {
 		log.Fatal("Error: cannot find the format provider from server.")
 	}
