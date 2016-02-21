@@ -213,8 +213,20 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
 		p.chunkBusy = true
 		p.firstSpawn()
-		log.Println(p.Username + " joined the game")
-		p.SendMessage("Hello, this is lav7 test server!")
+		go func() {
+			<-time.After(time.Second * 2)
+
+			p.SendPacket(&proto.PlayStatus{
+				Status: proto.PlayerSpawn,
+			})
+
+			SpawnPlayer(p)
+			p.spawned = true
+
+			Message(p.Username + " joined")
+			log.Println(p.Username + " joined the game")
+			p.SendMessage("Hello, this is lav7 test server!")
+		}()
 
 	case *proto.Batch:
 		pk := pk.(*proto.Batch)
@@ -427,13 +439,6 @@ func (p *Player) firstSpawn() {
 		Type:          proto.PlayerListAdd,
 		PlayerEntries: entries,
 	})
-	p.SendPacket(&proto.PlayStatus{
-		Status: proto.PlayerSpawn,
-	})
-
-	SpawnPlayer(p)
-	p.spawned = true
-	Message(p.Username + " joined")
 }
 
 // Kick kicks player from server.

@@ -166,7 +166,6 @@ func (c Chunk) FullChunkData() []byte {
 	buf := bytes.NewBuffer(append(c.BlockData[:], c.MetaData[:]...)) // Block ID, Block MetaData
 	buffer.Write(buf, append(c.SkyLightData[:], c.LightData[:]...))  // SkyLight, Light
 	buffer.Write(buf, append(c.HeightMap[:], c.BiomeData[:]...))     // Height Map, Biome colors
-	buffer.Write(buf, append(c.HeightMap[:], c.BiomeData[:]...))     // Height Map, Biome colors
 	buffer.Write(buf, []byte{0, 0, 0, 0})                            // Extra data: NBT length 0
 	// No tile entity NBT fields
 	return buf.Bytes()
