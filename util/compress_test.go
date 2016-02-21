@@ -15,14 +15,15 @@ func TestCompress(t *testing.T) {
 
 	for _, buf := range bufs {
 		c := EncodeDeflate(buf)
-		if d, err := DecodeDeflate(c); err != nil {
+		var d []byte
+		var err error
+		if d, err = DecodeDeflate(c); err != nil {
 			t.Error("Error while decoding DEFLATE:", err)
 			return
-		} else {
-			if !bytes.Equal(d, buf) {
-				t.Errorf("Decoded result mismatch!\n%s\n%s", hex.Dump(buf), hex.Dump(d))
-				return
-			}
+		}
+		if !bytes.Equal(d, buf) {
+			t.Errorf("Decoded result mismatch!\n%s\n%s", hex.Dump(buf), hex.Dump(d))
+			return
 		}
 	}
 }

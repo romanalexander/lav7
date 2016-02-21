@@ -10,6 +10,7 @@
 package vilan
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -24,14 +25,17 @@ func init() {
 	lav7.RegisterProvider(new(Vilan))
 }
 
+// Vilan is a improved version of Dummy, grouping 16 chunks into a single section.
 type Vilan struct {
 	name string
 }
 
+// Init implemets format.Provider interface.
 func (v *Vilan) Init(name string) {
 	v.name = name
 }
 
+// Loadable implemets format.Provider interface.
 func (v *Vilan) Loadable(cx, cz int32) (path string, ok bool) {
 	sectionX, sectionZ := cx>>2, cz>>2
 	path = fmt.Sprintf("levels/%s/section.%d.%d.v", v.name, sectionX, sectionZ)
@@ -55,6 +59,7 @@ func (v *Vilan) Loadable(cx, cz int32) (path string, ok bool) {
 	return
 }
 
+// LoadChunk implemets format.Provider interface.
 func (v *Vilan) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err error) {
 	sectionX, sectionZ := cx>>2, cz>>2
 	path = fmt.Sprintf("levels/%s/section.%d.%d.v", v.name, sectionX, sectionZ)
@@ -71,16 +76,17 @@ func (v *Vilan) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err er
 	buf := bytes.NewBuffer(fbuf)
 	chunk = new(types.Chunk)
 	chunk.Mutex().Lock()
-	copy(chunk.BlockData[:], buf.Read(16*16*128))
-	copy(chunk.MetaData[:], buf.Read(16*16*64))
-	copy(chunk.LightData[:], buf.Read(16*16*64))
-	copy(chunk.SkyLightData[:], buf.Read(16*16*64))
-	copy(chunk.HeightMap[:], buf.Read(16*16))
-	copy(chunk.BiomeData[:], buf.Read(16*16*4))
+	copy(chunk.BlockData[:], buf.Next(16*16*128))
+	copy(chunk.MetaData[:], buf.Next(16*16*64))
+	copy(chunk.LightData[:], buf.Next(16*16*64))
+	copy(chunk.SkyLightData[:], buf.Next(16*16*64))
+	copy(chunk.HeightMap[:], buf.Next(16*16))
+	copy(chunk.BiomeData[:], buf.Next(16*16*4))
 	chunk.Mutex().Unlock()
 	return
 }
 
+// WriteChunk implemets format.Provider interface.
 func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	sectionX, sectionZ := cx>>2, cz>>2
 	path := fmt.Sprintf("levels/%s/section.%d.%d.v", v.name, sectionX, sectionZ)
@@ -109,13 +115,14 @@ func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	buf := new(bytes.Buffer)
 	chunk.Mutex().Lock()
 	defer chunk.Mutex().Unlock()
-	buf.BatchWrite(chunk.BlockData[:], chunk.MetaData[:], chunk.LightData[:], chunk.SkyLightData[:], chunk.HeightMap[:], chunk.BiomeData[:])
+	buffer.BatchWrite(buf, chunk.BlockData[:], chunk.MetaData[:], chunk.LightData[:], chunk.SkyLightData[:], chunk.HeightMap[:], chunk.BiomeData[:])
 
 	pos := 2 + int64(byte(cx&3)<<2|byte(cz&3))*83200
-	_, err = file.WriteAt(buf.Done(), pos)
+	_, err = file.WriteAt(buf.Bytes(), pos)
 	return err
 }
 
+// SaveAll implemets format.Provider interface.
 func (v *Vilan) SaveAll(chunks map[[2]int32]*types.Chunk) error {
 	errstr := ""
 	for k, c := range chunks {

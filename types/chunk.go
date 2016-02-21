@@ -1,6 +1,11 @@
 package types
 
-import "github.com/L7-MCPE/lav7/util"
+import (
+	"bytes"
+
+	"github.com/L7-MCPE/lav7/util"
+	"github.com/L7-MCPE/lav7/util/buffer"
+)
 
 // ChunkDelivery is a type for passing full chunk data to players.
 type ChunkDelivery struct {
@@ -23,7 +28,7 @@ type Chunk struct {
 }
 
 // FallbackChunk is a chunk to be returned if level provider fails to load chunk from file.
-var FallbackChunk Chunk = *new(Chunk)
+var FallbackChunk = *new(Chunk)
 
 // CopyFrom gets everything from given chunk, and writes to the chunk instance.
 // Mutex is not shared with given chunk. You don't need to RLock the copying chunk.
@@ -107,7 +112,7 @@ func (c Chunk) GetHeightMap(x, z byte) byte {
 	return c.HeightMap[uint16(z)<<4|uint16(x)]
 }
 
-// GetHeightMap saves highest block height on given X-Z coordinates.
+// SetHeightMap saves highest block height on given X-Z coordinates.
 func (c *Chunk) SetHeightMap(x, z, h byte) {
 	c.HeightMap[uint16(z)<<4|uint16(x)] = h
 }
@@ -158,10 +163,11 @@ func (c *Chunk) Mutex() util.RWLocker {
 
 // FullChunkData returns full chunk payload for FullChunkDataPacket. Order is layered.
 func (c Chunk) FullChunkData() []byte {
-	a := append(c.BlockData[:], c.MetaData[:]...)     // Block ID, Block MetaData
-	b := append(c.SkyLightData[:], c.LightData[:]...) // SkyLight, Light
-	c_ := append(c.HeightMap[:], c.BiomeData[:]...)   // Height Map, Biome colors
-	d := []byte{0, 0, 0, 0}                           // Extra data: length 0
+	buf := bytes.NewBuffer(append(c.BlockData[:], c.MetaData[:]...)) // Block ID, Block MetaData
+	buffer.Write(buf, append(c.SkyLightData[:], c.LightData[:]...))  // SkyLight, Light
+	buffer.Write(buf, append(c.HeightMap[:], c.BiomeData[:]...))     // Height Map, Biome colors
+	buffer.Write(buf, append(c.HeightMap[:], c.BiomeData[:]...))     // Height Map, Biome colors
+	buffer.Write(buf, []byte{0, 0, 0, 0})                            // Extra data: NBT length 0
 	// No tile entity NBT fields
-	return append(a, append(b, append(c_, d...)...)...) // Seems dirty :\
+	return buf.Bytes()
 }

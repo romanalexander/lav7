@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"io"
 
 	"github.com/L7-MCPE/lav7/util/buffer"
 	"github.com/minero/minero-go/proto/nbt"
@@ -15,7 +16,8 @@ type Item struct {
 	Compound *nbt.Compound
 }
 
-func (i *Item) Read(buf *bytes.Buffer) {
+// Read reads item data from io.Reader interface.
+func (i *Item) Read(buf io.Reader) {
 	i.ID = ID(buffer.ReadShort(buf))
 	if i.ID == 0 {
 		return
@@ -31,6 +33,7 @@ func (i *Item) Read(buf *bytes.Buffer) {
 	}
 }
 
+// Write returns byte slice with item data.
 func (i Item) Write() []byte {
 	if i.ID == 0 {
 		return []byte{0, 0}
@@ -46,6 +49,8 @@ func (i Item) Write() []byte {
 	return buf.Bytes()
 }
 
+// Block converts the item to block struct.
+// If ID is not a block ID, it panics.
 func (i Item) Block() Block {
 	return Block{
 		ID:   i.ID.Block(),

@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	. "github.com/L7-MCPE/lav7/proto"
+	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
@@ -16,6 +16,8 @@ import (
 
 const radius int32 = 5
 
+// PlayerCallback is a struct for delivering callbacks to other player goroutines;
+// It is usually used to bypass race issues.
 type PlayerCallback struct {
 	Call func(*Player, interface{})
 	Arg  interface{}
@@ -147,18 +149,18 @@ func (p *Player) updateChunk() {
 // HandlePacket handles received MCPE packet after raknet connection is established.
 func (p *Player) HandlePacket(b *bytes.Buffer) (err error) {
 	pid := buffer.ReadByte(b)
-	var pk Packet
-	if pk = GetPacket(pid); pk == nil {
+	var pk proto.Packet
+	if pk = proto.GetPacket(pid); pk == nil {
 		return
 	}
 	pk.Read(b)
 	return p.handleDataPacket(pk)
 }
 
-func (p *Player) handleDataPacket(pk Packet) (err error) {
+func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 	switch pk.(type) {
-	case *Login:
-		pk := pk.(*Login)
+	case *proto.Login:
+		pk := pk.(*proto.Login)
 		if p.loggedIn {
 			return
 		}
@@ -171,19 +173,19 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		iteratorLock.Unlock()
 		p.Username = pk.Username
 
-		ret := &PlayStatus{}
+		ret := &proto.PlayStatus{}
 		if pk.Proto1 > raknet.MinecraftProtocol {
-			ret.Status = LoginFailedServer
+			ret.Status = proto.LoginFailedServer
 			p.SendPacket(ret)
 			p.disconnect("Outdated server")
 			return
 		} else if pk.Proto1 < raknet.MinecraftProtocol {
-			ret.Status = LoginFailedClient
+			ret.Status = proto.LoginFailedClient
 			p.SendPacket(ret)
 			p.disconnect("Outdated client")
 			return
 		}
-		ret.Status = LoginSuccess
+		ret.Status = proto.LoginSuccess
 		p.SendPacket(ret)
 
 		p.ID = pk.ClientID
@@ -192,7 +194,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		p.SkinName = pk.SkinName
 		p.Skin = pk.Skin
 
-		p.SendPacket(&StartGame{
+		p.SendPacket(&proto.StartGame{
 			Seed:      0xffffffff, // -1
 			Dimension: 0,
 			Generator: 1, // 0: old, 1: infinite, 2: flat
@@ -214,31 +216,31 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 		log.Println(p.Username + " joined the game")
 		p.SendMessage("Hello, this is lav7 test server!")
 
-	case *Batch:
-		pk := pk.(*Batch)
+	case *proto.Batch:
+		pk := pk.(*proto.Batch)
 		for _, pp := range pk.Payloads {
 			if err = p.HandlePacket(bytes.NewBuffer(pp)); err != nil {
 				return
 			}
 		}
 
-	case *Text:
-		pk := pk.(*Text)
-		if pk.TextType == TextTypeTranslation {
+	case *proto.Text:
+		pk := pk.(*proto.Text)
+		if pk.TextType == proto.TextTypeTranslation {
 			return
 		}
 		Message(fmt.Sprintf("<%s> %s", p.Username, pk.Message))
 
-	case *MovePlayer:
-		pk := pk.(*MovePlayer)
+	case *proto.MovePlayer:
+		pk := pk.(*proto.MovePlayer)
 		// log.Println("Player move:", pk.X, pk.Y, pk.Z, pk.Yaw, pk.BodyYaw, pk.Pitch)
 		p.updateMove(pk)
 
-	case *RemoveBlock:
-		pk := pk.(*RemoveBlock)
+	case *proto.RemoveBlock:
+		pk := pk.(*proto.RemoveBlock)
 		p.Level.SetBlock(int32(pk.X), int32(pk.Y), int32(pk.Z), 0) // Air
-		p.BroadcastOthers(&UpdateBlock{
-			BlockRecords: []BlockRecord{
+		p.BroadcastOthers(&proto.UpdateBlock{
+			BlockRecords: []proto.BlockRecord{
 				{
 					X:     uint32(pk.X),
 					Y:     byte(pk.Y),
@@ -248,12 +250,12 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 			},
 		})
 
-	case *UseItem:
-		pk := pk.(*UseItem)
+	case *proto.UseItem:
+		pk := pk.(*proto.UseItem)
 		px, py, pz := int32(pk.X), int32(pk.Y), int32(pk.Z)
 		if !p.Level.OnUseItem(&px, &py, &pz, pk.Face, pk.Item) {
-			p.BroadcastOthers(&UpdateBlock{
-				BlockRecords: []BlockRecord{
+			p.BroadcastOthers(&proto.UpdateBlock{
+				BlockRecords: []proto.BlockRecord{
 					{
 						X: uint32(px),
 						Y: byte(py),
@@ -262,27 +264,27 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 							ID:   byte(pk.Item.ID),
 							Meta: byte(pk.Item.Meta),
 						},
-						Flags: UpdateAllPriority,
+						Flags: proto.UpdateAllPriority,
 					},
 				},
 			})
 		} else {
-			p.SendPacket(&UpdateBlock{
-				BlockRecords: []BlockRecord{
+			p.SendPacket(&proto.UpdateBlock{
+				BlockRecords: []proto.BlockRecord{
 					{
 						X:     uint32(pk.X),
 						Y:     byte(pk.Y),
 						Z:     uint32(pk.Z),
 						Block: types.Block{},
-						Flags: UpdateAllPriority,
+						Flags: proto.UpdateAllPriority,
 					},
 				},
 			})
 		}
 		//spew.Dump(pk)
 
-	case *Animate:
-		pk := pk.(*Animate)
+	case *proto.Animate:
+		pk := pk.(*proto.Animate)
 		pk.EntityID = p.EntityID
 		p.BroadcastOthers(pk)
 
@@ -295,8 +297,8 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 
 // SendMessage sends text to player.
 func (p *Player) SendMessage(msg string) {
-	p.SendPacket(&Text{
-		TextType: TextTypeRaw,
+	p.SendPacket(&proto.Text{
+		TextType: proto.TextTypeRaw,
 		Message:  msg,
 	})
 }
@@ -304,10 +306,10 @@ func (p *Player) SendMessage(msg string) {
 //NOTE: This function is NOT goroutine-safe. Only for internal use.
 func (p *Player) sendChunk(c types.ChunkDelivery) {
 	c.Chunk.Mutex().RLock()
-	i := &FullChunkData{
+	i := &proto.FullChunkData{
 		ChunkX:  uint32(c.X),
 		ChunkZ:  uint32(c.Z),
-		Order:   OrderLayered,
+		Order:   proto.OrderLayered,
 		Payload: c.Chunk.FullChunkData(),
 	}
 	c.Chunk.Mutex().RUnlock()
@@ -319,7 +321,7 @@ func (p *Player) ShowPlayer(player *Player) {
 	if p.IsVisible(player) || p.IsSelf(player) {
 		return
 	}
-	p.SendPacket(&AddPlayer{
+	p.SendPacket(&proto.AddPlayer{
 		RawUUID:  player.UUID,
 		Username: player.Username,
 		EntityID: player.EntityID,
@@ -341,7 +343,7 @@ func (p *Player) HidePlayer(player *Player) {
 	if !p.IsVisible(player) || p.IsSelf(player) {
 		return
 	}
-	p.SendPacket(&RemovePlayer{
+	p.SendPacket(&proto.RemovePlayer{
 		EntityID: player.EntityID,
 		RawUUID:  player.UUID,
 	})
@@ -359,14 +361,14 @@ func (p *Player) IsSelf(player *Player) bool {
 	return p.EntityID == player.EntityID
 }
 
-func (p *Player) updateMove(pk *MovePlayer) {
+func (p *Player) updateMove(pk *proto.MovePlayer) {
 	p.Position.X, p.Position.Y, p.Position.Z = pk.X, pk.Y, pk.Z
 	p.Yaw, p.BodyYaw, p.Pitch = pk.Yaw, pk.BodyYaw, pk.Pitch
 
 	go BroadcastCallback(PlayerCallback{
 		Call: func(pl *Player, arg interface{}) {
 			if pl.IsVisible(p) {
-				pl.SendPacket(&MoveEntity{
+				pl.SendPacket(&proto.MoveEntity{
 					EntityIDs: []uint64{p.EntityID},
 					EntityPos: [][6]float32{{
 						pk.X,
@@ -390,9 +392,9 @@ func (p *Player) firstSpawn() {
 	BroadcastCallback(PlayerCallback{
 		Call: func(player *Player, arg interface{}) {
 			player.ShowPlayer(p)
-			player.SendPacket(&PlayerList{
-				Type: PlayerListAdd,
-				PlayerEntries: []PlayerListEntry{{
+			player.SendPacket(&proto.PlayerList{
+				Type: proto.PlayerListAdd,
+				PlayerEntries: []proto.PlayerListEntry{{
 					RawUUID:  p.UUID,
 					EntityID: p.EntityID,
 					Username: p.Username,
@@ -403,10 +405,10 @@ func (p *Player) firstSpawn() {
 		},
 	})
 
-	entries := make([]PlayerListEntry, 0)
+	var entries []proto.PlayerListEntry
 	AsPlayers(func(pl *Player) {
 		p.ShowPlayer(pl)
-		entries = append(entries, PlayerListEntry{
+		entries = append(entries, proto.PlayerListEntry{
 			RawUUID:  pl.UUID,
 			EntityID: pl.EntityID,
 			Username: pl.Username,
@@ -421,12 +423,12 @@ func (p *Player) firstSpawn() {
 		}
 	}
 
-	p.SendPacket(&PlayerList{
-		Type:          PlayerListAdd,
+	p.SendPacket(&proto.PlayerList{
+		Type:          proto.PlayerListAdd,
 		PlayerEntries: entries,
 	})
-	p.SendPacket(&PlayStatus{
-		Status: PlayerSpawn,
+	p.SendPacket(&proto.PlayStatus{
+		Status: proto.PlayerSpawn,
 	})
 
 	SpawnPlayer(p)
@@ -440,7 +442,7 @@ func (p *Player) Kick(reason string) {
 }
 
 func (p *Player) disconnect(msg string) {
-	p.SendDirect(&Disconnect{
+	p.SendDirect(&proto.Disconnect{
 		Message: msg,
 	})
 
@@ -453,7 +455,7 @@ func (p *Player) disconnect(msg string) {
 }
 
 // BroadcastOthers broadcasts packet except player self.
-func (p *Player) BroadcastOthers(pk Packet) {
+func (p *Player) BroadcastOthers(pk proto.Packet) {
 	AsPlayers(func(pl *Player) {
 		if !pl.IsSelf(p) {
 			pl.SendPacket(pk)
@@ -462,14 +464,14 @@ func (p *Player) BroadcastOthers(pk Packet) {
 }
 
 // SendPacket sends given packet to client.
-func (p *Player) SendPacket(pk Packet) {
+func (p *Player) SendPacket(pk proto.Packet) {
 	buf := bytes.NewBuffer([]byte{0x8e, pk.Pid()})
 	buffer.Write(buf, pk.Write().Bytes())
 	p.send(buf)
 }
 
 // SendDirect sends given packet without passing to raknetChan channel.
-func (p *Player) SendDirect(pk Packet) {
+func (p *Player) SendDirect(pk proto.Packet) {
 	buf := bytes.NewBuffer([]byte{0x8e, pk.Pid()})
 	buffer.Write(buf, pk.Write().Bytes())
 
@@ -487,8 +489,8 @@ func (p *Player) SendDirect(pk Packet) {
 }
 
 // SendCompressed sends packed BatchPacket with given packets.
-func (p *Player) SendCompressed(pks ...Packet) {
-	batch := &Batch{
+func (p *Player) SendCompressed(pks ...proto.Packet) {
+	batch := &proto.Batch{
 		Payloads: make([][]byte, len(pks)),
 	}
 	for i, pk := range pks {

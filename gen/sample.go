@@ -6,10 +6,12 @@ import (
 	"github.com/L7-MCPE/lav7/types"
 )
 
+// SmapleGenerator is a simple generator concept.
 type SampleGenerator struct {
 	Cache *types.Chunk
 }
 
+// Init implemets gen.Generator interface.
 func (s *SampleGenerator) Init() {
 	chunk := new(types.Chunk)
 	for x := byte(0); x < 16; x++ {
@@ -25,6 +27,7 @@ func (s *SampleGenerator) Init() {
 	s.Cache = chunk
 }
 
+// Gen implemets gen.Generator interface.
 func (s *SampleGenerator) Gen(x, z int32) *types.Chunk {
 	chunk := new(types.Chunk)
 	chunk.CopyFrom(s.Cache)

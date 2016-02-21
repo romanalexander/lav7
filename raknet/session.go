@@ -17,7 +17,13 @@ import (
 
 const windowSize = 512
 const chanBufsize = 64
+
+// MaxPingTries defines max retry count on ping timeout.
+// If ping timeouts MaxPingTries + 1 times, session will be closed.
 const MaxPingTries uint64 = 2
+
+// RecoveryTimeout defines how long packets can live on recoery queue.
+// Once the packet is sent, the packet will be on recoery queue in RecoveryTimeout duration.
 const RecoveryTimeout = time.Second * 3
 
 // Sessions contains each raknet client sessions.
@@ -189,9 +195,9 @@ func (s *Session) handlePacket(pk Packet) {
 		if r == nil {
 			return
 		}
-		if or, ok := r.(buffer.Overflow); ok {
+		if _, ok := r.(buffer.Overflow); ok {
 			log.Println("Recovering panic:", r)
-			buffer.Dump(or.Buffer)
+			buffer.Dump(pk.Buffer)
 			debug.PrintStack()
 		}
 	}()

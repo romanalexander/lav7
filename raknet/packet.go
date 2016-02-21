@@ -141,7 +141,7 @@ func (dp *DataPacket) Decode() {
 	return
 }
 
-// Len returns total buffer length of data packet.
+// TotalLen returns total buffer length of data packet.
 func (dp *DataPacket) TotalLen() int {
 	length := 4
 	for _, d := range dp.Packets {

@@ -1,16 +1,19 @@
 package gen
 
 import (
-	"github.com/L7-MCPE/lav7/types"
 	"image"
+
+	"github.com/L7-MCPE/lav7/types"
 )
 
+// ImageGenerator sets biome color to given image fixels.
 type ImageGenerator struct {
 	Cache         *types.Chunk
 	Image         image.Image
 	Width, Height int32
 }
 
+// Init implemets gen.Generator interface.
 func (s *ImageGenerator) Init() {
 	chunk := new(types.Chunk)
 	for x := byte(0); x < 16; x++ {
@@ -26,6 +29,7 @@ func (s *ImageGenerator) Init() {
 	s.Cache = chunk
 }
 
+// Gen implemets gen.Generator interface.
 func (s *ImageGenerator) Gen(x, z int32) *types.Chunk {
 	chunk := new(types.Chunk)
 	chunk.CopyFrom(s.Cache)
@@ -53,6 +57,7 @@ func (s *ImageGenerator) Gen(x, z int32) *types.Chunk {
 	return chunk
 }
 
+// getImageXZ implemets gen.Generator interface.
 func (s *ImageGenerator) getImageXZ(bx, bz, isx, isz int32) (int32, int32) {
 	diffX, diffZ := bx-isx, bz-isz
 	diffX %= s.Width

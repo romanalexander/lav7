@@ -175,6 +175,7 @@ func (lv *Level) Save() {
 	lv.SaveAll(lv.ChunkMap)
 }
 
+// GetBlock returns block ID on given coordinates.
 func (lv Level) GetBlock(x, y, z int32) byte {
 	c := lv.GetChunk(x>>4, z>>4)
 	c.Mutex().RLock()
@@ -182,6 +183,7 @@ func (lv Level) GetBlock(x, y, z int32) byte {
 	return c.GetBlock(byte(x&0xf), byte(y), byte(z&0xf))
 }
 
+// SetBlock sets block ID on given coordinates.
 func (lv *Level) SetBlock(x, y, z int32, b byte) {
 	c := lv.GetChunk(x>>4, z>>4)
 	c.Mutex().Lock()
@@ -189,6 +191,7 @@ func (lv *Level) SetBlock(x, y, z int32, b byte) {
 	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), b)
 }
 
+// GetBlockMeta returns block meta on given coordinates.
 func (lv Level) GetBlockMeta(x, y, z int32) byte {
 	c := lv.GetChunk(x>>4, z>>4)
 	c.Mutex().RLock()
@@ -196,6 +199,7 @@ func (lv Level) GetBlockMeta(x, y, z int32) byte {
 	return c.GetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf))
 }
 
+// SetBlockMeta sets block meta on given coordinates.
 func (lv *Level) SetBlockMeta(x, y, z int32, b byte) {
 	c := lv.GetChunk(x>>4, z>>4)
 	c.Mutex().Lock()
@@ -203,6 +207,8 @@ func (lv *Level) SetBlockMeta(x, y, z int32, b byte) {
 	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), b)
 }
 
+// Get returns types.Block struct on given coordinates.
+// The struct will contain block ID/meta.
 func (lv Level) Get(x, y, z int32) types.Block {
 	c := lv.GetChunk(x>>4, z>>4)
 	return types.Block{
@@ -211,6 +217,7 @@ func (lv Level) Get(x, y, z int32) types.Block {
 	}
 }
 
+// Set sets block to given types.Block struct on given coordinates.
 func (lv Level) Set(x, y, z int32, block types.Block) {
 	c := lv.GetChunk(x>>4, z>>4)
 	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), block.ID)
