@@ -24,7 +24,7 @@ Pull requests are always welcome, but please check these before writing pull req
  - Supported platform: `darwin/386 darwin/amd64 freebsd/386 freebsd/amd64 freebsd/arm linux/386 linux/amd64 linux/arm windows/386 windows/amd64 openbsd/386 openbsd/amd64 android/arm`
   - `linux/arm` and `android/arm` support ARMv5/ARMv6/ARMv7 build.
   - Use `adb shell` or [Terminal Emulator](https://play.google.com/store/apps/details?id=jackpal.androidterm) to execute binary on Android.
- - [Click here to download latest build](http://cr0sh2k.tk/files/lav7/latest)
+ - [Click here to download latest build](http://cr0sh2k.tk/files/lav7/builds/latest)
 
 ### Not supported? Compile from source.
  - Requirements: Latest Go installation
