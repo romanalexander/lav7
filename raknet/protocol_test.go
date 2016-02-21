@@ -84,7 +84,7 @@ func TestACK(t *testing.T) {
 		}
 		b = b[1:]
 		var result []uint32
-		result, err = DecodeAck(buffer.FromBytes(b))
+		result, err = DecodeAck(bytes.NewBuffer(b))
 		if err != nil {
 			t.Error("Error while decoding ACK:", err)
 			return
@@ -92,7 +92,7 @@ func TestACK(t *testing.T) {
 		if fmt.Sprint(v.Expect) != fmt.Sprint(result) {
 			t.Errorf("ACK decoding result mismatch: \n%v\n%v\ninput: %v", v.Expect, result, b)
 		}
-		var rb *buffer.Buffer
+		var rb *bytes.Buffer
 		rb, err = EncodeAck(v.Expect)
 		if err != nil {
 			t.Error("Error while encoding ACK:", err)
@@ -109,7 +109,7 @@ func packetB64(b64 string) Packet {
 	if err != nil {
 		panic(fmt.Sprint("Error while decoding base64 payload:", err))
 	}
-	return Packet{buffer.FromBytes(b[1:]), new(net.UDPAddr)}
+	return Packet{bytes.NewBuffer(b[1:]), new(net.UDPAddr)}
 }
 
 func TestOCR1(t *testing.T) {

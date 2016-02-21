@@ -87,7 +87,7 @@ func TestBatchRead(t *testing.T) {
 		{[]byte{0, 32, 1, 4}, "SS", []interface{}{32, 260}},
 	}
 	for _, test := range tests {
-		b := buffer.FromBytes(test.init)
+		b := bytes.NewBuffer(test.init)
 		r, err := b.BatchRead(test.fmt)
 		if err != nil {
 			t.Error(

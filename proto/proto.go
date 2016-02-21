@@ -2,6 +2,7 @@
 package proto
 
 import (
+	"bytes"
 	"log"
 
 	"github.com/L7-MCPE/lav7/raknet"
@@ -129,8 +130,8 @@ var packets = map[byte]Packet{
 
 type Packet interface {
 	Pid() byte
-	Read(*buffer.Buffer)
-	Write() *buffer.Buffer
+	Read(*bytes.Buffer)
+	Write() *bytes.Buffer
 }
 
 // GetPackets returns Packet struct with given pid.
@@ -152,20 +153,20 @@ type Login struct {
 
 func (i Login) Pid() byte { return LoginHead } // 0x8f
 
-func (i *Login) Read(buf *buffer.Buffer) {
-	buf.BatchRead(&i.Username, &i.Proto1)
+func (i *Login) Read(buf *bytes.Buffer) {
+	buffer.BatchRead(buf, &i.Username, &i.Proto1)
 	if i.Proto1 < raknet.MinecraftProtocol { // Old protocol
 		return
 	}
-	buf.BatchRead(&i.Proto2, &i.ClientID)
-	copy(i.RawUUID[:], buf.Read(16))
-	buf.BatchRead(&i.ServerAddress, &i.ClientSecret, &i.SkinName)
-	i.Skin = []byte(buf.ReadString())
+	buffer.BatchRead(buf, &i.Proto2, &i.ClientID)
+	copy(i.RawUUID[:], buf.Next(16))
+	buffer.BatchRead(buf, &i.ServerAddress, &i.ClientSecret, &i.SkinName)
+	i.Skin = []byte(buffer.ReadString(buf))
 }
 
-func (i Login) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.Username, i.Proto1, i.Proto2,
+func (i Login) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, i.Username, i.Proto1, i.Proto2,
 		i.ClientID, i.RawUUID[:], i.ServerAddress,
 		i.ClientSecret, i.SkinName, string(i.Skin))
 	return buf
@@ -184,13 +185,13 @@ type PlayStatus struct {
 
 func (i *PlayStatus) Pid() byte { return PlayStatusHead }
 
-func (i *PlayStatus) Read(buf *buffer.Buffer) {
-	i.Status = buf.ReadInt()
+func (i *PlayStatus) Read(buf *bytes.Buffer) {
+	i.Status = buffer.ReadInt(buf)
 }
 
-func (i *PlayStatus) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(i.Status)
+func (i *PlayStatus) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.Status)
 	return buf
 }
 
@@ -200,13 +201,13 @@ type Disconnect struct {
 
 func (i *Disconnect) Pid() byte { return DisconnectHead }
 
-func (i *Disconnect) Read(buf *buffer.Buffer) {
-	i.Message = buf.ReadString()
+func (i *Disconnect) Read(buf *bytes.Buffer) {
+	i.Message = buffer.ReadString(buf)
 }
 
-func (i *Disconnect) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteString(i.Message)
+func (i *Disconnect) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteString(buf, i.Message)
 	return buf
 }
 
@@ -216,17 +217,17 @@ type Batch struct {
 
 func (i Batch) Pid() byte { return BatchHead } // 0x92
 
-func (i *Batch) Read(buf *buffer.Buffer) {
+func (i *Batch) Read(buf *bytes.Buffer) {
 	i.Payloads = make([][]byte, 0)
-	payload, err := util.DecodeDeflate(buf.Read(uint32(buf.ReadInt())))
+	payload, err := util.DecodeDeflate(buf.Next(int(buffer.ReadInt(buf))))
 	if err != nil {
 		log.Println("Error while decompressing Batch payload:", err)
 		return
 	}
-	b := buffer.FromBytes(payload)
-	for b.Require(4) {
-		size := b.ReadInt()
-		pk := b.Read(size)
+	b := bytes.NewBuffer(payload)
+	for b.Len() > 4 {
+		size := buffer.ReadInt(b)
+		pk := b.Next(int(size))
 		if pk[0] == 0x92 {
 			panic("Invalid BatchPacket inside BatchPacket")
 		}
@@ -234,15 +235,15 @@ func (i *Batch) Read(buf *buffer.Buffer) {
 	}
 }
 
-func (i Batch) Write() *buffer.Buffer {
-	b := new(buffer.Buffer)
+func (i Batch) Write() *bytes.Buffer {
+	b := new(bytes.Buffer)
 	for _, pk := range i.Payloads {
-		b.WriteInt(uint32(len(pk)))
-		b.Write(pk)
+		buffer.WriteInt(b, uint32(len(pk)))
+		buffer.Write(b, pk)
 	}
-	payload := util.EncodeDeflate(b.Done())
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(uint32(len(payload)), payload)
+	payload := util.EncodeDeflate(b.Bytes())
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, uint32(len(payload)), payload)
 	return buf
 }
 
@@ -264,38 +265,38 @@ type Text struct {
 
 func (i Text) Pid() byte { return TextHead } // 0x93
 
-func (i *Text) Read(buf *buffer.Buffer) {
-	i.TextType = buf.ReadByte()
+func (i *Text) Read(buf *bytes.Buffer) {
+	i.TextType = buffer.ReadByte(buf)
 	switch i.TextType {
 	case TextTypePopup, TextTypeChat:
-		buf.ReadAny(&i.Source)
+		buffer.ReadAny(buf, &i.Source)
 		fallthrough
 	case TextTypeRaw, TextTypeTip, TextTypeSystem:
-		buf.ReadAny(&i.Message)
+		buffer.ReadAny(buf, &i.Message)
 	case TextTypeTranslation:
-		buf.ReadAny(&i.Message)
-		cnt := buf.ReadByte()
+		buffer.ReadAny(buf, &i.Message)
+		cnt := buffer.ReadByte(buf)
 		i.Params = make([]string, cnt)
 		for k := byte(0); k < cnt; k++ {
-			i.Params[k] = buf.ReadString()
+			i.Params[k] = buffer.ReadString(buf)
 		}
 	}
 }
 
-func (i Text) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.TextType)
+func (i Text) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.TextType)
 	switch i.TextType {
 	case TextTypePopup, TextTypeChat:
-		buf.WriteAny(i.Source)
+		buffer.WriteAny(buf, i.Source)
 		fallthrough
 	case TextTypeRaw, TextTypeTip, TextTypeSystem:
-		buf.WriteAny(i.Message)
+		buffer.WriteAny(buf, i.Message)
 	case TextTypeTranslation:
-		buf.WriteAny(&i.Message)
-		buf.WriteByte(byte(len(i.Params)))
+		buffer.WriteAny(buf, &i.Message)
+		buffer.WriteByte(buf, byte(len(i.Params)))
 		for _, p := range i.Params {
-			buf.WriteAny(p)
+			buffer.WriteAny(buf, p)
 		}
 	}
 	return buf
@@ -316,15 +317,15 @@ type SetTime struct {
 
 func (i SetTime) Pid() byte { return SetTimeHead }
 
-func (i *SetTime) Read(buf *buffer.Buffer) {
-	i.Time = uint32((buf.ReadInt() / 19200) * FullTime)
-	i.Started = buf.ReadBool()
+func (i *SetTime) Read(buf *bytes.Buffer) {
+	i.Time = uint32((buffer.ReadInt(buf) / 19200) * FullTime)
+	i.Started = buffer.ReadBool(buf)
 }
 
-func (i SetTime) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(uint32((i.Time * 19200) / FullTime))
-	buf.WriteBool(i.Started)
+func (i SetTime) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, uint32((i.Time*19200)/FullTime))
+	buffer.WriteBool(buf, i.Started)
 	return buf
 }
 
@@ -340,20 +341,20 @@ type StartGame struct {
 
 func (i StartGame) Pid() byte { return StartGameHead } // 0x95
 
-func (i *StartGame) Read(buf *buffer.Buffer) {
-	buf.BatchRead(&i.Seed, &i.Dimension, &i.Generator,
+func (i *StartGame) Read(buf *bytes.Buffer) {
+	buffer.BatchRead(buf, &i.Seed, &i.Dimension, &i.Generator,
 		&i.Gamemode, &i.EntityID, &i.SpawnX,
 		&i.SpawnY, &i.SpawnZ, &i.X,
 		&i.Y, &i.Z)
 }
 
-func (i StartGame) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.Seed, i.Dimension, i.Generator,
+func (i StartGame) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, i.Seed, i.Dimension, i.Generator,
 		i.Gamemode, i.EntityID, i.SpawnX,
 		i.SpawnY, i.SpawnZ, i.X,
 		i.Y, i.Z)
-	buf.WriteByte(0)
+	buffer.WriteByte(buf, 0)
 	return buf
 }
 
@@ -369,22 +370,22 @@ type AddPlayer struct {
 
 func (i AddPlayer) Pid() byte { return AddPlayerHead }
 
-func (i *AddPlayer) Read(buf *buffer.Buffer) {
-	copy(i.RawUUID[:], buf.Read(16))
-	buf.BatchRead(&i.Username, &i.EntityID,
+func (i *AddPlayer) Read(buf *bytes.Buffer) {
+	copy(i.RawUUID[:], buf.Next(16))
+	buffer.BatchRead(buf, &i.Username, &i.EntityID,
 		&i.X, &i.Y, &i.Z,
 		&i.SpeedX, &i.SpeedY, &i.SpeedZ,
 		&i.BodyYaw, &i.Yaw, &i.Pitch)
-	i.Metadata = buf.Read(0)
+	i.Metadata = buf.Bytes()
 }
 
-func (i AddPlayer) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.RawUUID[:], i.Username, i.EntityID,
+func (i AddPlayer) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, i.RawUUID[:], i.Username, i.EntityID,
 		i.X, i.Y, i.Z,
 		i.SpeedX, i.SpeedY, i.SpeedZ,
 		i.BodyYaw, i.Yaw, i.Pitch, i.Metadata)
-	buf.WriteByte(0x7f) // Temporal, TODO: implement metadata functions
+	buffer.WriteByte(buf, 0x7f) // Temporal, TODO: implement metadata functions
 	return buf
 }
 
@@ -395,14 +396,14 @@ type RemovePlayer struct {
 
 func (i RemovePlayer) Pid() byte { return RemovePlayerHead }
 
-func (i *RemovePlayer) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
-	copy(i.RawUUID[:], buf.Read(16))
+func (i *RemovePlayer) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
+	copy(i.RawUUID[:], buf.Next(16))
 }
 
-func (i RemovePlayer) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
+func (i RemovePlayer) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
 	buf.Write(i.RawUUID[:])
 	return buf
 }
@@ -420,23 +421,23 @@ type AddEntity struct {
 
 func (i AddEntity) Pid() byte { return AddEntityHead }
 
-func (i *AddEntity) Read(buf *buffer.Buffer) {
-	buf.BatchRead(&i.EntityID, &i.Type,
+func (i *AddEntity) Read(buf *bytes.Buffer) {
+	buffer.BatchRead(buf, &i.EntityID, &i.Type,
 		&i.X, &i.Y, &i.Z,
 		&i.SpeedX, &i.SpeedY, &i.SpeedZ,
 		&i.Yaw, &i.Pitch)
-	i.Metadata = buf.Read(0)
+	i.Metadata = buf.Bytes()
 	// TODO
 }
 
-func (i AddEntity) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.EntityID, i.Type,
+func (i AddEntity) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, i.EntityID, i.Type,
 		i.X, i.Y, i.Z,
 		i.SpeedX, i.SpeedY, i.SpeedZ,
 		i.Yaw, i.Pitch)
-	buf.WriteByte(0x7f)
-	buf.BatchWrite(i.Link1, i.Link2, i.Link3)
+	buffer.WriteByte(buf, 0x7f)
+	buffer.BatchWrite(buf, i.Link1, i.Link2, i.Link3)
 	return buf
 }
 
@@ -446,13 +447,13 @@ type RemoveEntity struct {
 
 func (i RemoveEntity) Pid() byte { return RemoveEntityHead }
 
-func (i *RemoveEntity) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
+func (i *RemoveEntity) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
 }
 
-func (i RemoveEntity) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
+func (i RemoveEntity) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
 	return buf
 }
 
@@ -469,28 +470,28 @@ type AddItemEntity struct {
 
 func (i AddItemEntity) Pid() byte { return AddItemEntityHead }
 
-func (i *AddItemEntity) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
+func (i *AddItemEntity) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
 	i.Item = new(types.Item)
 	i.Item.Read(buf)
-	i.X = buf.ReadFloat()
-	i.Y = buf.ReadFloat()
-	i.Z = buf.ReadFloat()
-	i.SpeedX = buf.ReadFloat()
-	i.SpeedY = buf.ReadFloat()
-	i.SpeedZ = buf.ReadFloat()
+	i.X = buffer.ReadFloat(buf)
+	i.Y = buffer.ReadFloat(buf)
+	i.Z = buffer.ReadFloat(buf)
+	i.SpeedX = buffer.ReadFloat(buf)
+	i.SpeedY = buffer.ReadFloat(buf)
+	i.SpeedZ = buffer.ReadFloat(buf)
 }
 
-func (i AddItemEntity) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
+func (i AddItemEntity) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
 	buf.Write(i.Item.Write())
-	buf.WriteFloat(i.X)
-	buf.WriteFloat(i.Y)
-	buf.WriteFloat(i.Z)
-	buf.WriteFloat(i.SpeedX)
-	buf.WriteFloat(i.SpeedY)
-	buf.WriteFloat(i.SpeedZ)
+	buffer.WriteFloat(buf, i.X)
+	buffer.WriteFloat(buf, i.Y)
+	buffer.WriteFloat(buf, i.Z)
+	buffer.WriteFloat(buf, i.SpeedX)
+	buffer.WriteFloat(buf, i.SpeedY)
+	buffer.WriteFloat(buf, i.SpeedZ)
 	return buf
 }
 
@@ -501,15 +502,15 @@ type TakeItemEntity struct {
 
 func (i TakeItemEntity) Pid() byte { return TakeItemEntityHead }
 
-func (i *TakeItemEntity) Read(buf *buffer.Buffer) {
-	i.Target = buf.ReadLong()
-	i.EntityID = buf.ReadLong()
+func (i *TakeItemEntity) Read(buf *bytes.Buffer) {
+	i.Target = buffer.ReadLong(buf)
+	i.EntityID = buffer.ReadLong(buf)
 }
 
-func (i TakeItemEntity) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.Target)
-	buf.WriteLong(i.EntityID)
+func (i TakeItemEntity) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.Target)
+	buffer.WriteLong(buf, i.EntityID)
 	return buf
 }
 
@@ -520,28 +521,28 @@ type MoveEntity struct {
 
 func (i MoveEntity) Pid() byte { return MoveEntityHead }
 
-func (i *MoveEntity) Read(buf *buffer.Buffer) {
-	entityCnt := buf.ReadInt()
+func (i *MoveEntity) Read(buf *bytes.Buffer) {
+	entityCnt := buffer.ReadInt(buf)
 	i.EntityIDs = make([]uint64, entityCnt)
 	i.EntityPos = make([][6]float32, entityCnt)
 	for j := uint32(0); j < entityCnt; j++ {
-		i.EntityIDs[j] = buf.ReadLong()
+		i.EntityIDs[j] = buffer.ReadLong(buf)
 		for k := 0; k < 6; k++ {
-			i.EntityPos[j][k] = buf.ReadFloat()
+			i.EntityPos[j][k] = buffer.ReadFloat(buf)
 		}
 	}
 }
 
-func (i MoveEntity) Write() *buffer.Buffer {
+func (i MoveEntity) Write() *bytes.Buffer {
 	if len(i.EntityIDs) != len(i.EntityPos) {
 		panic("Entity data slice length mismatch")
 	}
-	buf := new(buffer.Buffer)
-	buf.WriteInt(uint32(len(i.EntityIDs)))
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, uint32(len(i.EntityIDs)))
 	for k, e := range i.EntityIDs {
-		buf.WriteLong(e)
+		buffer.WriteLong(buf, e)
 		for j := 0; j < 6; j++ {
-			buf.WriteFloat(i.EntityPos[k][j])
+			buffer.WriteFloat(buf, i.EntityPos[k][j])
 		}
 	}
 	return buf
@@ -567,29 +568,29 @@ type MovePlayer struct {
 
 func (i MovePlayer) Pid() byte { return MovePlayerHead }
 
-func (i *MovePlayer) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
-	i.X = buf.ReadFloat()
-	i.Y = buf.ReadFloat()
-	i.Z = buf.ReadFloat()
-	i.Yaw = buf.ReadFloat()
-	i.BodyYaw = buf.ReadFloat()
-	i.Pitch = buf.ReadFloat()
-	i.Mode = buf.ReadByte()
-	i.OnGround = buf.ReadByte()
+func (i *MovePlayer) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
+	i.X = buffer.ReadFloat(buf)
+	i.Y = buffer.ReadFloat(buf)
+	i.Z = buffer.ReadFloat(buf)
+	i.Yaw = buffer.ReadFloat(buf)
+	i.BodyYaw = buffer.ReadFloat(buf)
+	i.Pitch = buffer.ReadFloat(buf)
+	i.Mode = buffer.ReadByte(buf)
+	i.OnGround = buffer.ReadByte(buf)
 }
 
-func (i MovePlayer) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
-	buf.WriteFloat(i.X)
-	buf.WriteFloat(i.Y)
-	buf.WriteFloat(i.Z)
-	buf.WriteFloat(i.Yaw)
-	buf.WriteFloat(i.BodyYaw)
-	buf.WriteFloat(i.Pitch)
-	buf.WriteByte(i.Mode)
-	buf.WriteByte(i.OnGround)
+func (i MovePlayer) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
+	buffer.WriteFloat(buf, i.X)
+	buffer.WriteFloat(buf, i.Y)
+	buffer.WriteFloat(buf, i.Z)
+	buffer.WriteFloat(buf, i.Yaw)
+	buffer.WriteFloat(buf, i.BodyYaw)
+	buffer.WriteFloat(buf, i.Pitch)
+	buffer.WriteByte(buf, i.Mode)
+	buffer.WriteByte(buf, i.OnGround)
 	return buf
 }
 
@@ -601,19 +602,19 @@ type RemoveBlock struct {
 
 func (i RemoveBlock) Pid() byte { return RemoveBlockHead }
 
-func (i *RemoveBlock) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
-	i.X = buf.ReadInt()
-	i.Z = buf.ReadInt()
-	i.Y = buf.ReadByte()
+func (i *RemoveBlock) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
+	i.X = buffer.ReadInt(buf)
+	i.Z = buffer.ReadInt(buf)
+	i.Y = buffer.ReadByte(buf)
 }
 
-func (i RemoveBlock) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
-	buf.WriteInt(i.X)
-	buf.WriteInt(i.Z)
-	buf.WriteByte(i.Y)
+func (i RemoveBlock) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
+	buffer.WriteInt(buf, i.X)
+	buffer.WriteInt(buf, i.Z)
+	buffer.WriteByte(buf, i.Y)
 	return buf
 }
 
@@ -640,15 +641,15 @@ type UpdateBlock struct {
 
 func (i UpdateBlock) Pid() byte { return UpdateBlockHead }
 
-func (i *UpdateBlock) Read(buf *buffer.Buffer) {
-	records := buf.ReadInt()
+func (i *UpdateBlock) Read(buf *bytes.Buffer) {
+	records := buffer.ReadInt(buf)
 	i.BlockRecords = make([]BlockRecord, records)
 	for k := uint32(0); k < records; k++ {
-		x := buf.ReadInt()
-		z := buf.ReadInt()
-		y := buf.ReadByte()
-		id := buf.ReadByte()
-		flagMeta := buf.ReadByte()
+		x := buffer.ReadInt(buf)
+		z := buffer.ReadInt(buf)
+		y := buffer.ReadByte(buf)
+		id := buffer.ReadByte(buf)
+		flagMeta := buffer.ReadByte(buf)
 		i.BlockRecords[k] = BlockRecord{X: x,
 			Y: y,
 			Z: z,
@@ -661,11 +662,11 @@ func (i *UpdateBlock) Read(buf *buffer.Buffer) {
 	}
 }
 
-func (i UpdateBlock) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(uint32(len(i.BlockRecords)))
+func (i UpdateBlock) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, uint32(len(i.BlockRecords)))
 	for _, record := range i.BlockRecords {
-		buf.BatchWrite(record.X, record.Z, record.Y, record.Block.ID, (record.Flags<<4 | record.Block.Meta))
+		buffer.BatchWrite(buf, record.X, record.Z, record.Y, record.Block.ID, (record.Flags<<4 | record.Block.Meta))
 	}
 	return buf
 }
@@ -681,23 +682,23 @@ type AddPainting struct {
 
 func (i AddPainting) Pid() byte { return AddPaintingHead }
 
-func (i *AddPainting) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
-	i.X = buf.ReadInt()
-	i.Y = buf.ReadInt()
-	i.Z = buf.ReadInt()
-	i.Direction = buf.ReadInt()
-	i.Title = buf.ReadString()
+func (i *AddPainting) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
+	i.X = buffer.ReadInt(buf)
+	i.Y = buffer.ReadInt(buf)
+	i.Z = buffer.ReadInt(buf)
+	i.Direction = buffer.ReadInt(buf)
+	i.Title = buffer.ReadString(buf)
 }
 
-func (i AddPainting) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
-	buf.WriteInt(i.X)
-	buf.WriteInt(i.Y)
-	buf.WriteInt(i.Z)
-	buf.WriteInt(i.Direction)
-	buf.WriteString(i.Title)
+func (i AddPainting) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
+	buffer.WriteInt(buf, i.X)
+	buffer.WriteInt(buf, i.Y)
+	buffer.WriteInt(buf, i.Z)
+	buffer.WriteInt(buf, i.Direction)
+	buffer.WriteString(buf, i.Title)
 	return buf
 }
 
@@ -708,21 +709,21 @@ type Explode struct {
 
 func (i Explode) Pid() byte { return ExplodeHead }
 
-func (i *Explode) Read(buf *buffer.Buffer) {
-	buf.BatchRead(&i.X, &i.Y, &i.Z, &i.Radius)
-	cnt := buf.ReadInt()
+func (i *Explode) Read(buf *bytes.Buffer) {
+	buffer.BatchRead(buf, &i.X, &i.Y, &i.Z, &i.Radius)
+	cnt := buffer.ReadInt(buf)
 	i.Records = make([][3]byte, cnt)
 	for k := uint32(0); k < cnt; k++ {
-		buf.BatchRead(&i.Records[k][0], &i.Records[k][1], &i.Records[k][2])
+		buffer.BatchRead(buf, &i.Records[k][0], &i.Records[k][1], &i.Records[k][2])
 	}
 }
 
-func (i Explode) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.X, i.Y, i.Z, i.Radius)
-	buf.WriteInt(uint32(len(i.Records)))
+func (i Explode) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, i.X, i.Y, i.Z, i.Radius)
+	buffer.WriteInt(buf, uint32(len(i.Records)))
 	for _, r := range i.Records {
-		buf.BatchWrite(r[0], r[1], r[2])
+		buffer.BatchWrite(buf, r[0], r[1], r[2])
 	}
 	return buf
 }
@@ -768,21 +769,21 @@ type LevelEvent struct {
 
 func (i LevelEvent) Pid() byte { return LevelEventHead }
 
-func (i *LevelEvent) Read(buf *buffer.Buffer) {
-	i.EventID = buf.ReadShort()
-	i.X = buf.ReadFloat()
-	i.Y = buf.ReadFloat()
-	i.Z = buf.ReadFloat()
-	i.Data = buf.ReadInt()
+func (i *LevelEvent) Read(buf *bytes.Buffer) {
+	i.EventID = buffer.ReadShort(buf)
+	i.X = buffer.ReadFloat(buf)
+	i.Y = buffer.ReadFloat(buf)
+	i.Z = buffer.ReadFloat(buf)
+	i.Data = buffer.ReadInt(buf)
 }
 
-func (i LevelEvent) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteShort(i.EventID)
-	buf.WriteFloat(i.X)
-	buf.WriteFloat(i.Y)
-	buf.WriteFloat(i.Z)
-	buf.WriteInt(i.Data)
+func (i LevelEvent) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteShort(buf, i.EventID)
+	buffer.WriteFloat(buf, i.X)
+	buffer.WriteFloat(buf, i.Y)
+	buffer.WriteFloat(buf, i.Z)
+	buffer.WriteInt(buf, i.Data)
 	return buf
 }
 
@@ -796,21 +797,21 @@ type BlockEvent struct {
 
 func (i BlockEvent) Pid() byte { return BlockEventHead }
 
-func (i *BlockEvent) Read(buf *buffer.Buffer) {
-	i.X = buf.ReadInt()
-	i.Y = buf.ReadInt()
-	i.Z = buf.ReadInt()
-	i.Case1 = buf.ReadInt()
-	i.Case2 = buf.ReadInt()
+func (i *BlockEvent) Read(buf *bytes.Buffer) {
+	i.X = buffer.ReadInt(buf)
+	i.Y = buffer.ReadInt(buf)
+	i.Z = buffer.ReadInt(buf)
+	i.Case1 = buffer.ReadInt(buf)
+	i.Case2 = buffer.ReadInt(buf)
 }
 
-func (i BlockEvent) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(i.X)
-	buf.WriteInt(i.Y)
-	buf.WriteInt(i.Z)
-	buf.WriteInt(i.Case1)
-	buf.WriteInt(i.Case2)
+func (i BlockEvent) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.X)
+	buffer.WriteInt(buf, i.Y)
+	buffer.WriteInt(buf, i.Z)
+	buffer.WriteInt(buf, i.Case1)
+	buffer.WriteInt(buf, i.Case2)
 	return buf
 }
 
@@ -840,15 +841,15 @@ type EntityEvent struct {
 
 func (i EntityEvent) Pid() byte { return EntityEventHead }
 
-func (i *EntityEvent) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
-	i.Event = buf.ReadByte()
+func (i *EntityEvent) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
+	i.Event = buffer.ReadByte(buf)
 }
 
-func (i EntityEvent) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
-	buf.WriteByte(i.Event)
+func (i EntityEvent) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
+	buffer.WriteByte(buf, i.Event)
 	return buf
 }
 
@@ -869,23 +870,23 @@ type MobEffect struct {
 
 func (i MobEffect) Pid() byte { return MobEffectHead }
 
-func (i *MobEffect) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
-	i.EventId = buf.ReadByte()
-	i.EffectId = buf.ReadByte()
-	i.Amplifier = buf.ReadByte()
-	i.Particles = buf.ReadBool()
-	i.Duration = buf.ReadInt()
+func (i *MobEffect) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
+	i.EventId = buffer.ReadByte(buf)
+	i.EffectId = buffer.ReadByte(buf)
+	i.Amplifier = buffer.ReadByte(buf)
+	i.Particles = buffer.ReadBool(buf)
+	i.Duration = buffer.ReadInt(buf)
 }
 
-func (i MobEffect) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
-	buf.WriteByte(i.EventId)
-	buf.WriteByte(i.EffectId)
-	buf.WriteByte(i.Amplifier)
-	buf.WriteBool(i.Particles)
-	buf.WriteInt(i.Duration)
+func (i MobEffect) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
+	buffer.WriteByte(buf, i.EventId)
+	buffer.WriteByte(buf, i.EffectId)
+	buffer.WriteByte(buf, i.Amplifier)
+	buffer.WriteBool(buf, i.Particles)
+	buffer.WriteInt(buf, i.Duration)
 	return buf
 }
 
@@ -895,9 +896,9 @@ type UpdateAttributes struct {
 
 func (i UpdateAttributes) Pid() byte { return UpdateAttributesHead }
 
-func (i *UpdateAttributes) Read(buf *buffer.Buffer) {}
+func (i *UpdateAttributes) Read(buf *bytes.Buffer) {}
 
-func (i UpdateAttributes) Write() *buffer.Buffer { return nil }
+func (i UpdateAttributes) Write() *bytes.Buffer { return nil }
 
 type MobEquipment struct {
 	EntityID     uint64
@@ -908,20 +909,20 @@ type MobEquipment struct {
 
 func (i MobEquipment) Pid() byte { return MobEquipmentHead }
 
-func (i *MobEquipment) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
+func (i *MobEquipment) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
 	i.Item = new(types.Item)
 	i.Item.Read(buf)
-	i.Slot = buf.ReadByte()
-	i.SelectedSlot = buf.ReadByte()
+	i.Slot = buffer.ReadByte(buf)
+	i.SelectedSlot = buffer.ReadByte(buf)
 }
 
-func (i MobEquipment) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
+func (i MobEquipment) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
 	buf.Write(i.Item.Write())
-	buf.WriteByte(i.Slot)
-	buf.WriteByte(i.SelectedSlot)
+	buffer.WriteByte(buf, i.Slot)
+	buffer.WriteByte(buf, i.SelectedSlot)
 	return buf
 }
 
@@ -932,17 +933,17 @@ type MobArmorEquipment struct {
 
 func (i MobArmorEquipment) Pid() byte { return MobArmorEquipmentHead }
 
-func (i *MobArmorEquipment) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
+func (i *MobArmorEquipment) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
 	for j := range i.Slots {
 		i.Slots[j] = new(types.Item)
 		i.Slots[j].Read(buf)
 	}
 }
 
-func (i MobArmorEquipment) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
+func (i MobArmorEquipment) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
 	for j := range i.Slots {
 		buf.Write(i.Slots[j].Write())
 	}
@@ -956,15 +957,15 @@ type Interact struct {
 
 func (i Interact) Pid() byte { return InteractHead }
 
-func (i *Interact) Read(buf *buffer.Buffer) {
-	i.Action = buf.ReadByte()
-	i.Target = buf.ReadLong()
+func (i *Interact) Read(buf *bytes.Buffer) {
+	i.Action = buffer.ReadByte(buf)
+	i.Target = buffer.ReadLong(buf)
 }
 
-func (i Interact) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.Action)
-	buf.WriteLong(i.Target)
+func (i Interact) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.Action)
+	buffer.WriteLong(buf, i.Target)
 	return buf
 }
 
@@ -978,17 +979,17 @@ type UseItem struct {
 
 func (i UseItem) Pid() byte { return UseItemHead }
 
-func (i *UseItem) Read(buf *buffer.Buffer) {
-	buf.BatchRead(&i.X, &i.Y, &i.Z,
+func (i *UseItem) Read(buf *bytes.Buffer) {
+	buffer.BatchRead(buf, &i.X, &i.Y, &i.Z,
 		&i.Face, &i.FloatX, &i.FloatY, &i.FloatZ,
 		&i.PosX, &i.PosY, &i.PosZ)
 	i.Item = new(types.Item)
 	i.Item.Read(buf)
 }
 
-func (i UseItem) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.X, i.Y, i.Z,
+func (i UseItem) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, i.X, i.Y, i.Z,
 		i.Face, i.FloatX, i.FloatY, i.FloatZ,
 		i.PosX, i.PosY, i.PosZ, i.Item.Write())
 	return buf
@@ -1022,23 +1023,23 @@ type PlayerAction struct {
 
 func (i PlayerAction) Pid() byte { return PlayerActionHead }
 
-func (i *PlayerAction) Read(buf *buffer.Buffer) {
-	i.EntityID = buf.ReadLong()
-	i.Action = buf.ReadInt()
-	i.X = buf.ReadInt()
-	i.Y = buf.ReadInt()
-	i.Z = buf.ReadInt()
-	i.Face = buf.ReadInt()
+func (i *PlayerAction) Read(buf *bytes.Buffer) {
+	i.EntityID = buffer.ReadLong(buf)
+	i.Action = buffer.ReadInt(buf)
+	i.X = buffer.ReadInt(buf)
+	i.Y = buffer.ReadInt(buf)
+	i.Z = buffer.ReadInt(buf)
+	i.Face = buffer.ReadInt(buf)
 }
 
-func (i PlayerAction) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.EntityID)
-	buf.WriteInt(i.Action)
-	buf.WriteInt(i.X)
-	buf.WriteInt(i.Y)
-	buf.WriteInt(i.Z)
-	buf.WriteInt(i.Face)
+func (i PlayerAction) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.EntityID)
+	buffer.WriteInt(buf, i.Action)
+	buffer.WriteInt(buf, i.X)
+	buffer.WriteInt(buf, i.Y)
+	buffer.WriteInt(buf, i.Z)
+	buffer.WriteInt(buf, i.Face)
 	return buf
 }
 
@@ -1048,13 +1049,13 @@ type HurtArmor struct {
 
 func (i HurtArmor) Pid() byte { return HurtArmorHead }
 
-func (i *HurtArmor) Read(buf *buffer.Buffer) {
-	i.Health = buf.ReadByte()
+func (i *HurtArmor) Read(buf *bytes.Buffer) {
+	i.Health = buffer.ReadByte(buf)
 }
 
-func (i HurtArmor) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.Health)
+func (i HurtArmor) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.Health)
 	return buf
 }
 
@@ -1062,9 +1063,9 @@ type SetEntityData struct{} // TODO Metadata
 
 func (i SetEntityData) Pid() byte { return SetEntityDataHead }
 
-func (i *SetEntityData) Read(buf *buffer.Buffer) {}
+func (i *SetEntityData) Read(buf *bytes.Buffer) {}
 
-func (i SetEntityData) Write() *buffer.Buffer {
+func (i SetEntityData) Write() *bytes.Buffer {
 	return nil
 }
 
@@ -1075,28 +1076,28 @@ type SetEntityMotion struct {
 
 func (i SetEntityMotion) Pid() byte { return SetEntityMotionHead }
 
-func (i *SetEntityMotion) Read(buf *buffer.Buffer) {
-	entityCnt := buf.ReadInt()
+func (i *SetEntityMotion) Read(buf *bytes.Buffer) {
+	entityCnt := buffer.ReadInt(buf)
 	i.EntityIDs = make([]uint64, entityCnt)
 	i.EntityMotion = make([][6]float32, entityCnt)
 	for j := uint32(0); j < entityCnt; j++ {
-		i.EntityIDs[j] = buf.ReadLong()
+		i.EntityIDs[j] = buffer.ReadLong(buf)
 		for k := 0; k < 6; k++ {
-			i.EntityMotion[j][k] = buf.ReadFloat()
+			i.EntityMotion[j][k] = buffer.ReadFloat(buf)
 		}
 	}
 }
 
-func (i SetEntityMotion) Write() *buffer.Buffer {
+func (i SetEntityMotion) Write() *bytes.Buffer {
 	if len(i.EntityIDs) != len(i.EntityMotion) {
 		panic("Entity data slice length mismatch")
 	}
-	buf := new(buffer.Buffer)
-	buf.WriteInt(uint32(len(i.EntityIDs)))
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, uint32(len(i.EntityIDs)))
 	for k, e := range i.EntityIDs {
-		buf.WriteLong(e)
+		buffer.WriteLong(buf, e)
 		for j := 0; j < 6; j++ {
-			buf.WriteFloat(i.EntityMotion[k][j])
+			buffer.WriteFloat(buf, i.EntityMotion[k][j])
 		}
 	}
 	return buf
@@ -1110,17 +1111,17 @@ type SetEntityLink struct {
 
 func (i SetEntityLink) Pid() byte { return SetEntityLinkHead }
 
-func (i *SetEntityLink) Read(buf *buffer.Buffer) {
-	i.From = buf.ReadLong()
-	i.To = buf.ReadLong()
-	i.Type = buf.ReadByte()
+func (i *SetEntityLink) Read(buf *bytes.Buffer) {
+	i.From = buffer.ReadLong(buf)
+	i.To = buffer.ReadLong(buf)
+	i.Type = buffer.ReadByte(buf)
 }
 
-func (i SetEntityLink) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteLong(i.From)
-	buf.WriteLong(i.To)
-	buf.WriteByte(i.Type)
+func (i SetEntityLink) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteLong(buf, i.From)
+	buffer.WriteLong(buf, i.To)
+	buffer.WriteByte(buf, i.Type)
 	return buf
 }
 
@@ -1130,13 +1131,13 @@ type SetHealth struct {
 
 func (i SetHealth) Pid() byte { return SetHealthHead }
 
-func (i *SetHealth) Read(buf *buffer.Buffer) {
-	i.Health = buf.ReadInt()
+func (i *SetHealth) Read(buf *bytes.Buffer) {
+	i.Health = buffer.ReadInt(buf)
 }
 
-func (i SetHealth) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(i.Health)
+func (i SetHealth) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.Health)
 	return buf
 }
 
@@ -1148,17 +1149,17 @@ type SetSpawnPosition struct {
 
 func (i SetSpawnPosition) Pid() byte { return SetSpawnPositionHead }
 
-func (i *SetSpawnPosition) Read(buf *buffer.Buffer) {
-	i.X = buf.ReadInt()
-	i.Y = buf.ReadInt()
-	i.Z = buf.ReadInt()
+func (i *SetSpawnPosition) Read(buf *bytes.Buffer) {
+	i.X = buffer.ReadInt(buf)
+	i.Y = buffer.ReadInt(buf)
+	i.Z = buffer.ReadInt(buf)
 }
 
-func (i SetSpawnPosition) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(i.X)
-	buf.WriteInt(i.Y)
-	buf.WriteInt(i.Z)
+func (i SetSpawnPosition) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.X)
+	buffer.WriteInt(buf, i.Y)
+	buffer.WriteInt(buf, i.Z)
 	return buf
 }
 
@@ -1169,15 +1170,15 @@ type Animate struct {
 
 func (i Animate) Pid() byte { return AnimateHead }
 
-func (i *Animate) Read(buf *buffer.Buffer) {
-	i.Action = buf.ReadByte()
-	i.EntityID = buf.ReadLong()
+func (i *Animate) Read(buf *bytes.Buffer) {
+	i.Action = buffer.ReadByte(buf)
+	i.EntityID = buffer.ReadLong(buf)
 }
 
-func (i Animate) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.Action)
-	buf.WriteLong(i.EntityID)
+func (i Animate) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.Action)
+	buffer.WriteLong(buf, i.EntityID)
 	return buf
 }
 
@@ -1189,17 +1190,17 @@ type Respawn struct {
 
 func (i Respawn) Pid() byte { return RespawnHead }
 
-func (i *Respawn) Read(buf *buffer.Buffer) {
-	i.X = buf.ReadFloat()
-	i.Y = buf.ReadFloat()
-	i.Z = buf.ReadFloat()
+func (i *Respawn) Read(buf *bytes.Buffer) {
+	i.X = buffer.ReadFloat(buf)
+	i.Y = buffer.ReadFloat(buf)
+	i.Z = buffer.ReadFloat(buf)
 }
 
-func (i Respawn) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteFloat(i.X)
-	buf.WriteFloat(i.Y)
-	buf.WriteFloat(i.Z)
+func (i Respawn) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteFloat(buf, i.X)
+	buffer.WriteFloat(buf, i.Y)
+	buffer.WriteFloat(buf, i.Z)
 	return buf
 }
 
@@ -1210,15 +1211,15 @@ type DropItem struct {
 
 func (i DropItem) Pid() byte { return DropItemHead }
 
-func (i *DropItem) Read(buf *buffer.Buffer) {
-	i.Type = buf.ReadByte()
+func (i *DropItem) Read(buf *bytes.Buffer) {
+	i.Type = buffer.ReadByte(buf)
 	i.Item = new(types.Item)
 	i.Item.Read(buf)
 }
 
-func (i DropItem) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.Type, i.Item.Write())
+func (i DropItem) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, i.Type, i.Item.Write())
 	return buf
 }
 
@@ -1233,23 +1234,23 @@ type ContainerOpen struct {
 
 func (i ContainerOpen) Pid() byte { return ContainerOpenHead }
 
-func (i *ContainerOpen) Read(buf *buffer.Buffer) {
-	i.WindowID = buf.ReadByte()
-	i.Type = buf.ReadByte()
-	i.Slots = buf.ReadShort()
-	i.X = buf.ReadInt()
-	i.Y = buf.ReadInt()
-	i.Z = buf.ReadInt()
+func (i *ContainerOpen) Read(buf *bytes.Buffer) {
+	i.WindowID = buffer.ReadByte(buf)
+	i.Type = buffer.ReadByte(buf)
+	i.Slots = buffer.ReadShort(buf)
+	i.X = buffer.ReadInt(buf)
+	i.Y = buffer.ReadInt(buf)
+	i.Z = buffer.ReadInt(buf)
 }
 
-func (i ContainerOpen) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.WindowID)
-	buf.WriteByte(i.Type)
-	buf.WriteShort(i.Slots)
-	buf.WriteInt(i.X)
-	buf.WriteInt(i.Y)
-	buf.WriteInt(i.Z)
+func (i ContainerOpen) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.WindowID)
+	buffer.WriteByte(buf, i.Type)
+	buffer.WriteShort(buf, i.Slots)
+	buffer.WriteInt(buf, i.X)
+	buffer.WriteInt(buf, i.Y)
+	buffer.WriteInt(buf, i.Z)
 	return buf
 }
 
@@ -1259,13 +1260,13 @@ type ContainerClose struct {
 
 func (i ContainerClose) Pid() byte { return ContainerCloseHead }
 
-func (i *ContainerClose) Read(buf *buffer.Buffer) {
-	i.WindowID = buf.ReadByte()
+func (i *ContainerClose) Read(buf *bytes.Buffer) {
+	i.WindowID = buffer.ReadByte(buf)
 }
 
-func (i ContainerClose) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.WindowID)
+func (i ContainerClose) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.WindowID)
 	return buf
 }
 
@@ -1278,19 +1279,19 @@ type ContainerSetSlot struct { // TODO: implement this after slots
 
 func (i ContainerSetSlot) Pid() byte { return ContainerSetSlotHead }
 
-func (i *ContainerSetSlot) Read(buf *buffer.Buffer) {
-	i.Windowid = buf.ReadByte()
-	i.Slot = buf.ReadShort()
-	i.HotbarSlot = buf.ReadShort()
+func (i *ContainerSetSlot) Read(buf *bytes.Buffer) {
+	i.Windowid = buffer.ReadByte(buf)
+	i.Slot = buffer.ReadShort(buf)
+	i.HotbarSlot = buffer.ReadShort(buf)
 	i.Item = new(types.Item)
 	i.Item.Read(buf)
 }
 
-func (i ContainerSetSlot) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.Windowid)
-	buf.WriteShort(i.Slot)
-	buf.WriteShort(i.HotbarSlot)
+func (i ContainerSetSlot) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.Windowid)
+	buffer.WriteShort(buf, i.Slot)
+	buffer.WriteShort(buf, i.HotbarSlot)
 	buf.Write(i.Item.Write())
 	return buf
 }
@@ -1303,17 +1304,17 @@ type ContainerSetData struct {
 
 func (i ContainerSetData) Pid() byte { return ContainerSetDataHead }
 
-func (i *ContainerSetData) Read(buf *buffer.Buffer) {
-	i.WindowID = buf.ReadByte()
-	i.Property = buf.ReadShort()
-	i.Value = buf.ReadShort()
+func (i *ContainerSetData) Read(buf *bytes.Buffer) {
+	i.WindowID = buffer.ReadByte(buf)
+	i.Property = buffer.ReadShort(buf)
+	i.Value = buffer.ReadShort(buf)
 }
 
-func (i ContainerSetData) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.WindowID)
-	buf.WriteShort(i.Property)
-	buf.WriteShort(i.Value)
+func (i ContainerSetData) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.WindowID)
+	buffer.WriteShort(buf, i.Property)
+	buffer.WriteShort(buf, i.Value)
 	return buf
 }
 
@@ -1331,39 +1332,39 @@ type ContainerSetContent struct {
 
 func (i ContainerSetContent) Pid() byte { return ContainerSetContentHead }
 
-func (i *ContainerSetContent) Read(buf *buffer.Buffer) {
-	i.WindowID = buf.ReadByte()
-	count := buf.ReadShort()
+func (i *ContainerSetContent) Read(buf *bytes.Buffer) {
+	i.WindowID = buffer.ReadByte(buf)
+	count := buffer.ReadShort(buf)
 	i.Slots = make([]*types.Item, count)
 	for j := range i.Slots {
-		if !buf.Require(0) {
+		if buf.Len() < 7 {
 			break
 		}
 		i.Slots[j] = new(types.Item)
 		i.Slots[j].Read(buf)
 	}
 	if i.WindowID == InventoryWindow {
-		count := buf.ReadShort()
+		count := buffer.ReadShort(buf)
 		i.Hotbar = make([]uint32, count)
 		for j := range i.Hotbar {
-			i.Hotbar[j] = buf.ReadInt()
+			i.Hotbar[j] = buffer.ReadInt(buf)
 		}
 	}
 }
 
-func (i ContainerSetContent) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.WindowID)
-	buf.WriteShort(uint16(len(i.Slots)))
+func (i ContainerSetContent) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.WindowID)
+	buffer.WriteShort(buf, uint16(len(i.Slots)))
 	for _, slot := range i.Slots {
 		buf.Write(slot.Write())
 	}
 	if i.WindowID == InventoryWindow {
 		for _, h := range i.Hotbar {
-			buf.WriteInt(h)
+			buffer.WriteInt(buf, h)
 		}
 	} else {
-		buf.WriteShort(0)
+		buffer.WriteShort(buf, 0)
 	}
 	return buf
 }
@@ -1372,17 +1373,17 @@ type CraftingData struct{} // TODO
 
 func (i CraftingData) Pid() byte { return CraftingDataHead }
 
-func (i *CraftingData) Read(buf *buffer.Buffer) {}
+func (i *CraftingData) Read(buf *bytes.Buffer) {}
 
-func (i CraftingData) Write() *buffer.Buffer { return nil }
+func (i CraftingData) Write() *bytes.Buffer { return nil }
 
 type CraftingEvent struct{} // TODO
 
 func (i CraftingEvent) Pid() byte { return CraftingEventHead }
 
-func (i *CraftingEvent) Read(buf *buffer.Buffer) {}
+func (i *CraftingEvent) Read(buf *bytes.Buffer) {}
 
-func (i CraftingEvent) Write() *buffer.Buffer { return nil }
+func (i CraftingEvent) Write() *bytes.Buffer { return nil }
 
 type AdventureSettings struct {
 	Flags uint32
@@ -1390,13 +1391,13 @@ type AdventureSettings struct {
 
 func (i AdventureSettings) Pid() byte { return AdventureSettingsHead }
 
-func (i *AdventureSettings) Read(buf *buffer.Buffer) {
-	i.Flags = buf.ReadInt()
+func (i *AdventureSettings) Read(buf *bytes.Buffer) {
+	i.Flags = buffer.ReadInt(buf)
 }
 
-func (i AdventureSettings) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(i.Flags)
+func (i AdventureSettings) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.Flags)
 	return buf
 }
 
@@ -1409,18 +1410,18 @@ type BlockEntityData struct {
 
 func (i BlockEntityData) Pid() byte { return BlockEntityDataHead }
 
-func (i *BlockEntityData) Read(buf *buffer.Buffer) {
-	i.X = buf.ReadInt()
-	i.Y = buf.ReadInt()
-	i.Z = buf.ReadInt()
-	i.NamedTag = buf.Read(0)
+func (i *BlockEntityData) Read(buf *bytes.Buffer) {
+	i.X = buffer.ReadInt(buf)
+	i.Y = buffer.ReadInt(buf)
+	i.Z = buffer.ReadInt(buf)
+	i.NamedTag = buf.Bytes()
 }
 
-func (i BlockEntityData) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(i.X)
-	buf.WriteInt(i.Y)
-	buf.WriteInt(i.Z)
+func (i BlockEntityData) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.X)
+	buffer.WriteInt(buf, i.Y)
+	buffer.WriteInt(buf, i.Z)
 	buf.Write(i.NamedTag)
 	return buf
 }
@@ -1438,14 +1439,14 @@ type FullChunkData struct {
 
 func (i FullChunkData) Pid() byte { return FullChunkDataHead }
 
-func (i *FullChunkData) Read(buf *buffer.Buffer) {
-	buf.BatchRead(&i.ChunkX, &i.ChunkZ, &i.Order)
-	i.Payload = buf.Read(uint32(buf.ReadInt()))
+func (i *FullChunkData) Read(buf *bytes.Buffer) {
+	buffer.BatchRead(buf, &i.ChunkX, &i.ChunkZ, &i.Order)
+	i.Payload = buf.Next(int(buffer.ReadInt(buf)))
 }
 
-func (i FullChunkData) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.BatchWrite(i.ChunkX, i.ChunkZ, i.Order,
+func (i FullChunkData) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.BatchWrite(buf, i.ChunkX, i.ChunkZ, i.Order,
 		uint32(len(i.Payload)), i.Payload)
 	return buf
 }
@@ -1456,13 +1457,13 @@ type SetDifficulty struct {
 
 func (i SetDifficulty) Pid() byte { return SetDifficultyHead }
 
-func (i *SetDifficulty) Read(buf *buffer.Buffer) {
-	i.Difficulty = buf.ReadInt()
+func (i *SetDifficulty) Read(buf *bytes.Buffer) {
+	i.Difficulty = buffer.ReadInt(buf)
 }
 
-func (i SetDifficulty) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(i.Difficulty)
+func (i SetDifficulty) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.Difficulty)
 	return buf
 }
 
@@ -1472,13 +1473,13 @@ type SetPlayerGametype struct {
 
 func (i SetPlayerGametype) Pid() byte { return SetPlayerGametypeHead }
 
-func (i *SetPlayerGametype) Read(buf *buffer.Buffer) {
-	i.Gamemode = buf.ReadInt()
+func (i *SetPlayerGametype) Read(buf *bytes.Buffer) {
+	i.Gamemode = buffer.ReadInt(buf)
 }
 
-func (i SetPlayerGametype) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteInt(i.Gamemode)
+func (i SetPlayerGametype) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.Gamemode)
 	return buf
 }
 
@@ -1501,38 +1502,38 @@ type PlayerList struct {
 
 func (i PlayerList) Pid() byte { return PlayerListHead }
 
-func (i *PlayerList) Read(buf *buffer.Buffer) {
-	i.Type = buf.ReadByte()
-	entryCnt := buf.ReadInt()
+func (i *PlayerList) Read(buf *bytes.Buffer) {
+	i.Type = buffer.ReadByte(buf)
+	entryCnt := buffer.ReadInt(buf)
 	i.PlayerEntries = make([]PlayerListEntry, entryCnt)
 	for k := uint32(0); k < entryCnt; k++ {
 		entry := PlayerListEntry{}
-		copy(entry.RawUUID[:], buf.Read(16))
+		copy(entry.RawUUID[:], buf.Next(16))
 		if i.Type == PlayerListRemove {
 			i.PlayerEntries[k] = entry
 			continue
 		}
-		entry.EntityID = buf.ReadLong()
-		entry.Username = buf.ReadString()
-		entry.SkinName = buf.ReadString()
-		entry.Skin = []byte(buf.ReadString())
+		entry.EntityID = buffer.ReadLong(buf)
+		entry.Username = buffer.ReadString(buf)
+		entry.SkinName = buffer.ReadString(buf)
+		entry.Skin = []byte(buffer.ReadString(buf))
 		i.PlayerEntries[k] = entry
 	}
 }
 
-func (i PlayerList) Write() *buffer.Buffer {
-	buf := new(buffer.Buffer)
-	buf.WriteByte(i.Type)
-	buf.WriteInt(uint32(len(i.PlayerEntries)))
+func (i PlayerList) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteByte(buf, i.Type)
+	buffer.WriteInt(buf, uint32(len(i.PlayerEntries)))
 	for _, entry := range i.PlayerEntries {
 		buf.Write(entry.RawUUID[:])
 		if i.Type == PlayerListRemove {
 			continue
 		}
-		buf.WriteLong(entry.EntityID)
-		buf.WriteString(entry.Username)
-		buf.WriteString(entry.SkinName)
-		buf.WriteString(string(entry.Skin))
+		buffer.WriteLong(buf, entry.EntityID)
+		buffer.WriteString(buf, entry.Username)
+		buffer.WriteString(buf, entry.SkinName)
+		buffer.WriteString(buf, string(entry.Skin))
 	}
 	return buf
 }

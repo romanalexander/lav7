@@ -68,7 +68,7 @@ func (v *Vilan) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err er
 	if err != nil {
 		return nil, err
 	}
-	buf := buffer.FromBytes(fbuf)
+	buf := bytes.NewBuffer(fbuf)
 	chunk = new(types.Chunk)
 	chunk.Mutex().Lock()
 	copy(chunk.BlockData[:], buf.Read(16*16*128))
@@ -106,7 +106,7 @@ func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	if _, err := file.WriteAt(fbuf, 0); err != nil {
 		return err
 	}
-	buf := new(buffer.Buffer)
+	buf := new(bytes.Buffer)
 	chunk.Mutex().Lock()
 	defer chunk.Mutex().Unlock()
 	buf.BatchWrite(chunk.BlockData[:], chunk.MetaData[:], chunk.LightData[:], chunk.SkyLightData[:], chunk.HeightMap[:], chunk.BiomeData[:])

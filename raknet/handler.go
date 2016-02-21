@@ -1,6 +1,7 @@
 package raknet
 
 import (
+	"bytes"
 	"log"
 	"net"
 
@@ -85,18 +86,18 @@ func (e *missingFieldError) Error() string {
 
 // Protocol is a handler interface for Raknet packets.
 type Protocol interface {
-	Read(*buffer.Buffer) Fields // NOTE: remove first byte(pid) before Read().
+	Read(*bytes.Buffer) Fields // NOTE: remove first byte(pid) before Read().
 	Handle(Fields, *Session)
-	Write(Fields) *buffer.Buffer // NOTE: Write() should put pid before encoding with buffer.FromBytes([]byte{), and should put target session address.
+	Write(Fields) *bytes.Buffer // NOTE: Write() should put pid before encoding with bytes.NewBuffer([]byte{), and should put target session address.
 }
 
 type openConnectionRequest1 struct{}
 
-func (p *openConnectionRequest1) Read(buf *buffer.Buffer) (f Fields) {
+func (p *openConnectionRequest1) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	buf.Read(16) // Magic
-	f["protocol"] = buf.ReadByte()
-	f["mtuSize"] = 18 + len(buf.Payload) - int(buf.Offset)
+	buf.Next(16) // Magic
+	f["protocol"] = buffer.ReadByte(buf)
+	f["mtuSize"] = 18 + buf.Len()
 	return
 }
 
@@ -113,50 +114,50 @@ func (p *openConnectionRequest1) Handle(f Fields, session *Session) {
 	session.send(buf)
 }
 
-func (p *openConnectionRequest1) Write(f Fields) (buf *buffer.Buffer) {
+func (p *openConnectionRequest1) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "protocol", "mtuSize") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x05})
+	buf = bytes.NewBuffer([]byte{0x05})
 	buf.Write([]byte(RaknetMagic))
-	buf.WriteByte(f["protocol"].(byte))
+	buffer.WriteByte(buf, f["protocol"].(byte))
 	buf.Write(make([]byte, f["mtuSize"].(int)-18))
 	return
 }
 
 type openConnectionReply1 struct{}
 
-func (p *openConnectionReply1) Read(buf *buffer.Buffer) (f Fields) {
+func (p *openConnectionReply1) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	buf.Read(16)
-	f["serverID"] = buf.ReadLong()
-	buf.Read(1)
-	f["mtuSize"] = buf.ReadShort()
+	buf.Next(16)
+	f["serverID"] = buffer.ReadLong(buf)
+	buf.Next(1)
+	f["mtuSize"] = buffer.ReadShort(buf)
 	return
 }
 
 func (p *openConnectionReply1) Handle(f Fields, session *Session) {}
 
-func (p *openConnectionReply1) Write(f Fields) (buf *buffer.Buffer) {
+func (p *openConnectionReply1) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "serverID", "mtuSize") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x06})
+	buf = bytes.NewBuffer([]byte{0x06})
 	buf.Write([]byte(RaknetMagic))
-	buf.WriteLong(f["serverID"].(uint64))
-	buf.WriteByte(0)
-	buf.WriteShort(uint16(f["mtuSize"].(int)))
+	buffer.WriteLong(buf, f["serverID"].(uint64))
+	buffer.WriteByte(buf, 0)
+	buffer.WriteShort(buf, uint16(f["mtuSize"].(int)))
 	return
 }
 
 type openConnectionRequest2 struct{}
 
-func (p *openConnectionRequest2) Read(buf *buffer.Buffer) (f Fields) {
+func (p *openConnectionRequest2) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	buf.Read(16)
-	f["serverAddress"] = buf.ReadAddress()
-	f["mtuSize"] = buf.ReadShort()
-	f["clientID"] = buf.ReadLong()
+	buf.Next(16)
+	f["serverAddress"] = buffer.ReadAddress(buf)
+	f["mtuSize"] = buffer.ReadShort(buf)
+	f["clientID"] = buffer.ReadLong(buf)
 	return
 }
 
@@ -176,53 +177,53 @@ func (p *openConnectionRequest2) Handle(f Fields, session *Session) {
 	session.send(buf)
 }
 
-func (p *openConnectionRequest2) Write(f Fields) (buf *buffer.Buffer) {
+func (p *openConnectionRequest2) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "serverAddress", "mtuSize", "clientID") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x07})
+	buf = bytes.NewBuffer([]byte{0x07})
 	buf.Write([]byte(RaknetMagic))
-	buf.WriteAddress(f["serverAddress"].(*net.UDPAddr))
-	buf.WriteShort(f["mtuSize"].(uint16))
-	buf.WriteLong(f["clientID"].(uint64))
+	buffer.WriteAddress(buf, f["serverAddress"].(*net.UDPAddr))
+	buffer.WriteShort(buf, f["mtuSize"].(uint16))
+	buffer.WriteLong(buf, f["clientID"].(uint64))
 	return
 }
 
 type openConnectionReply2 struct{}
 
-func (p *openConnectionReply2) Read(buf *buffer.Buffer) (f Fields) {
+func (p *openConnectionReply2) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	buf.Read(16)
-	f["serverID"] = buf.ReadLong()
-	f["clientAddress"] = buf.ReadAddress()
-	f["mtuSize"] = buf.ReadShort()
+	buf.Next(16)
+	f["serverID"] = buffer.ReadLong(buf)
+	f["clientAddress"] = buffer.ReadAddress(buf)
+	f["mtuSize"] = buffer.ReadShort(buf)
 	return
 }
 
 func (p *openConnectionReply2) Handle(f Fields, session *Session) {}
 
-func (p *openConnectionReply2) Write(f Fields) (buf *buffer.Buffer) {
+func (p *openConnectionReply2) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "serverID", "clientAddress", "mtuSize") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x08})
+	buf = bytes.NewBuffer([]byte{0x08})
 	buf.Write([]byte(RaknetMagic))
-	buf.WriteLong(f["serverID"].(uint64))
-	buf.WriteAddress(f["clientAddress"].(*net.UDPAddr))
-	buf.WriteShort(f["mtuSize"].(uint16))
-	buf.WriteByte(0)
+	buffer.WriteLong(buf, f["serverID"].(uint64))
+	buffer.WriteAddress(buf, f["clientAddress"].(*net.UDPAddr))
+	buffer.WriteShort(buf, f["mtuSize"].(uint16))
+	buffer.WriteByte(buf, 0)
 	return
 }
 
 type dataPacket struct{}
 
-func (p *dataPacket) Read(buf *buffer.Buffer) (f Fields) {
+func (p *dataPacket) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
 	dp := new(DataPacket)
 	dp.Buffer = buf
-	/*s
-	log.Println("======= DataPacket dump =======")
-	log.Println(hex.Dump(dp.Buffer.Payload))
+	/*
+		log.Println("======= DataPacket dump =======")
+		log.Println(hex.Dump(dp.Buffer.Payload))
 	*/
 	dp.Decode()
 	f["seqNumber"] = dp.SeqNumber
@@ -271,7 +272,7 @@ func (p *dataPacket) Handle(f Fields, session *Session) {
 	return
 }
 
-func (p *dataPacket) Write(f Fields) (buf *buffer.Buffer) {
+func (p *dataPacket) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "seqNumber", "packets") {
 		return
 	}
@@ -285,7 +286,7 @@ func (p *dataPacket) Write(f Fields) (buf *buffer.Buffer) {
 
 type ack struct{}
 
-func (p *ack) Read(buf *buffer.Buffer) (f Fields) {
+func (p *ack) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
 	f["seqs"] = DecodeAck(buf)
 	return
@@ -301,14 +302,14 @@ func (p *ack) Handle(f Fields, session *Session) {
 	}
 }
 
-func (p *ack) Write(f Fields) (buf *buffer.Buffer) {
+func (p *ack) Write(f Fields) (buf *bytes.Buffer) {
 	// Unused, should be directly sent on session.
 	return
 }
 
 type nack struct{}
 
-func (p *nack) Read(buf *buffer.Buffer) (f Fields) {
+func (p *nack) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
 	f["seqs"] = DecodeAck(buf)
 	return
@@ -322,20 +323,20 @@ func (p *nack) Handle(f Fields, session *Session) {
 	}
 }
 
-func (p *nack) Write(f Fields) (buf *buffer.Buffer) {
+func (p *nack) Write(f Fields) (buf *bytes.Buffer) {
 	// Unused, should be directly sent on session.
 	return
 }
 
 type clientConnect struct{}
 
-func (p *clientConnect) Read(buf *buffer.Buffer) (f Fields) {
+func (p *clientConnect) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	f["clientID"] = buf.ReadLong()
-	f["sendPing"] = buf.ReadLong()
+	f["clientID"] = buffer.ReadLong(buf)
+	f["sendPing"] = buffer.ReadLong(buf)
 	f["useSecurity"] = func() bool {
 		var b byte
-		b = buf.ReadByte()
+		b = buffer.ReadByte(buf)
 		return b > 0
 	}()
 	return
@@ -355,14 +356,14 @@ func (p *clientConnect) Handle(f Fields, session *Session) {
 	return
 }
 
-func (p *clientConnect) Write(f Fields) (buf *buffer.Buffer) {
+func (p *clientConnect) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "clientID", "sendPing", "useSecurity") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x09})
-	buf.WriteLong(f["clientID"].(uint64))
-	buf.WriteLong(f["sendPing"].(uint64))
-	buf.WriteByte(func() byte {
+	buf = bytes.NewBuffer([]byte{0x09})
+	buffer.WriteLong(buf, f["clientID"].(uint64))
+	buffer.WriteLong(buf, f["sendPing"].(uint64))
+	buffer.WriteByte(buf, func() byte {
 		if f["useSecurity"].(bool) {
 			return 1
 		}
@@ -373,7 +374,7 @@ func (p *clientConnect) Write(f Fields) (buf *buffer.Buffer) {
 
 type clientDisconnect struct{}
 
-func (p *clientDisconnect) Read(buf *buffer.Buffer) (f Fields) {
+func (p *clientDisconnect) Read(buf *bytes.Buffer) (f Fields) {
 	return
 }
 
@@ -381,22 +382,22 @@ func (p *clientDisconnect) Handle(f Fields, session *Session) {
 	session.Close("client disconnect")
 }
 
-func (p *clientDisconnect) Write(f Fields) (buf *buffer.Buffer) {
+func (p *clientDisconnect) Write(f Fields) (buf *bytes.Buffer) {
 	return
 }
 
 type clientHandshake struct{}
 
-func (p *clientHandshake) Read(buf *buffer.Buffer) (f Fields) {
+func (p *clientHandshake) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	f["address"] = buf.ReadAddress()
+	f["address"] = buffer.ReadAddress(buf)
 	addrs := make([]*net.UDPAddr, 10)
 	for i := 0; i < 10; i++ {
-		addrs[i] = buf.ReadAddress()
+		addrs[i] = buffer.ReadAddress(buf)
 	}
 	f["systemAddresses"] = addrs
-	f["sendPing"] = buf.ReadLong()
-	f["sendPong"] = buf.ReadLong()
+	f["sendPing"] = buffer.ReadLong(buf)
+	f["sendPong"] = buffer.ReadLong(buf)
 	return
 }
 
@@ -407,33 +408,33 @@ func (p *clientHandshake) Handle(f Fields, session *Session) {
 	return
 }
 
-func (p *clientHandshake) Write(f Fields) (buf *buffer.Buffer) {
+func (p *clientHandshake) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "address", "systemAddresses", "sendPing", "sendPong") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x13})
-	buf.WriteAddress(f["address"].(*net.UDPAddr))
+	buf = bytes.NewBuffer([]byte{0x13})
+	buffer.WriteAddress(buf, f["address"].(*net.UDPAddr))
 	for _, addr := range f["systemAddresses"].([]*net.UDPAddr) {
-		buf.WriteAddress(addr)
+		buffer.WriteAddress(buf, addr)
 	}
-	buf.WriteLong(f["sendPing"].(uint64))
-	buf.WriteLong(f["sendPong"].(uint64))
+	buffer.WriteLong(buf, f["sendPing"].(uint64))
+	buffer.WriteLong(buf, f["sendPong"].(uint64))
 	return
 }
 
 type serverHandshake struct{}
 
-func (p *serverHandshake) Read(buf *buffer.Buffer) (f Fields) {
+func (p *serverHandshake) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	f["address"] = buf.ReadAddress()
-	buf.Read(1) // Unknown
+	f["address"] = buffer.ReadAddress(buf)
+	buf.Next(1) // Unknown
 	addrs := make([]*net.UDPAddr, 10)
 	for i := 0; i < 10; i++ {
-		addrs[0] = buf.ReadAddress()
+		addrs[0] = buffer.ReadAddress(buf)
 	}
 	f["systemAddresses"] = addrs
-	f["sendPing"] = buf.ReadLong()
-	f["sendPong"] = buf.ReadLong()
+	f["sendPing"] = buffer.ReadLong(buf)
+	f["sendPong"] = buffer.ReadLong(buf)
 	return
 }
 
@@ -441,26 +442,26 @@ func (p *serverHandshake) Handle(f Fields, session *Session) {
 	return
 }
 
-func (p *serverHandshake) Write(f Fields) (buf *buffer.Buffer) {
+func (p *serverHandshake) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "address", "systemAddresses", "sendPing", "sendPong") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x10})
-	buf.WriteAddress(f["address"].(*net.UDPAddr))
-	buf.WriteByte(0) // Unknown
+	buf = bytes.NewBuffer([]byte{0x10})
+	buffer.WriteAddress(buf, f["address"].(*net.UDPAddr))
+	buffer.WriteByte(buf, 0) // Unknown
 	for _, addr := range f["systemAddresses"].([]*net.UDPAddr) {
-		buf.WriteAddress(addr)
+		buffer.WriteAddress(buf, addr)
 	}
-	buf.WriteLong(f["sendPing"].(uint64))
-	buf.WriteLong(f["sendPong"].(uint64))
+	buffer.WriteLong(buf, f["sendPing"].(uint64))
+	buffer.WriteLong(buf, f["sendPong"].(uint64))
 	return
 }
 
 type ping struct{}
 
-func (p *ping) Read(buf *buffer.Buffer) (f Fields) {
+func (p *ping) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	f["pingID"] = buf.ReadLong()
+	f["pingID"] = buffer.ReadLong(buf)
 	return
 }
 
@@ -472,20 +473,20 @@ func (p *ping) Handle(f Fields, session *Session) {
 	return
 }
 
-func (p *ping) Write(f Fields) (buf *buffer.Buffer) {
+func (p *ping) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "pingID") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x00})
-	buf.WriteLong(f["pingID"].(uint64))
+	buf = bytes.NewBuffer([]byte{0x00})
+	buffer.WriteLong(buf, f["pingID"].(uint64))
 	return
 }
 
 type pong struct{}
 
-func (p *pong) Read(buf *buffer.Buffer) (f Fields) {
+func (p *pong) Read(buf *bytes.Buffer) (f Fields) {
 	f = make(Fields)
-	f["pingID"] = buf.ReadLong()
+	f["pingID"] = buffer.ReadLong(buf)
 	return
 }
 
@@ -497,11 +498,11 @@ func (p *pong) Handle(f Fields, session *Session) {
 	return
 }
 
-func (p *pong) Write(f Fields) (buf *buffer.Buffer) {
+func (p *pong) Write(f Fields) (buf *bytes.Buffer) {
 	if !checkFields(f, "pingID") {
 		return
 	}
-	buf = buffer.FromBytes([]byte{0x03})
-	buf.WriteLong(f["pingID"].(uint64))
+	buf = bytes.NewBuffer([]byte{0x03})
+	buffer.WriteLong(buf, f["pingID"].(uint64))
 	return
 }

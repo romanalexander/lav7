@@ -1,6 +1,7 @@
 package raknet
 
 import (
+	"bytes"
 	"net"
 	"time"
 
@@ -9,18 +10,18 @@ import (
 
 // Packet is a struct which contains binary buffer, address, and send time.
 type Packet struct {
-	*buffer.Buffer
+	*bytes.Buffer
 	Address *net.UDPAddr
 }
 
 // NewPacket creates new packet with given packet id.
 func NewPacket(pid byte) Packet {
-	return Packet{buffer.FromBytes([]byte{pid}), new(net.UDPAddr)}
+	return Packet{bytes.NewBuffer([]byte{pid}), new(net.UDPAddr)}
 }
 
 // EncapsulatedPacket is a struct, containing more values for decoding/encoding encapsualted packets.
 type EncapsulatedPacket struct {
-	*buffer.Buffer
+	*bytes.Buffer
 	Reliability  byte
 	HasSplit     bool
 	MessageIndex uint32 // LE Triad
@@ -33,33 +34,35 @@ type EncapsulatedPacket struct {
 
 // NewEncapsulated returns decoded EncapsulatedPacket struct from given binary.
 // Do NOT set buf with *Packet struct. It could cause panic.
-func NewEncapsulated(buf *buffer.Buffer) (ep *EncapsulatedPacket) {
+func NewEncapsulated(buf *bytes.Buffer) (ep *EncapsulatedPacket) {
 	ep = new(EncapsulatedPacket)
-	ep.Buffer = new(buffer.Buffer)
-	flags := buf.ReadByte()
+	flags := buffer.ReadByte(buf)
 	ep.Reliability = flags >> 5
 	ep.HasSplit = (flags>>4)&1 > 0
-	l := uint32(buf.ReadShort())
+	l := uint32(buffer.ReadShort(buf))
 	length := l >> 3
 	if l%8 != 0 {
 		length++
 	}
 	if ep.Reliability > 0 {
 		if ep.Reliability >= 2 && ep.Reliability != 5 {
-			ep.MessageIndex = buf.ReadLTriad()
+			ep.MessageIndex = buffer.ReadLTriad(buf)
 		}
 		if ep.Reliability <= 4 && ep.Reliability != 2 {
-			ep.OrderIndex = buf.ReadLTriad()
-			ep.OrderChannel = buf.ReadByte()
+			ep.OrderIndex = buffer.ReadLTriad(buf)
+			ep.OrderChannel = buffer.ReadByte(buf)
 		}
 	}
 	if ep.HasSplit {
-		ep.SplitCount = buf.ReadInt()
-		ep.SplitID = buf.ReadShort()
-		ep.SplitIndex = buf.ReadInt()
+		ep.SplitCount = buffer.ReadInt(buf)
+		ep.SplitID = buffer.ReadShort(buf)
+		ep.SplitIndex = buffer.ReadInt(buf)
 	}
-	b := buf.Read(length)
-	ep.Buffer = buffer.FromBytes(b)
+	b, err := buffer.Read(buf, int(length))
+	if err != nil {
+		panic(err.Error())
+	}
+	ep.Buffer = bytes.NewBuffer(b)
 	return
 }
 
@@ -86,40 +89,41 @@ func (ep *EncapsulatedPacket) TotalLen() int {
 }
 
 // Bytes returns encoded binary from EncapsulatedPacket struct options.
-func (ep *EncapsulatedPacket) Bytes() (buf *buffer.Buffer) {
-	buf = new(buffer.Buffer)
-	buf.WriteByte(ep.Reliability<<5 | func() byte {
+func (ep *EncapsulatedPacket) Bytes() (buf *bytes.Buffer) {
+	buf = new(bytes.Buffer)
+	buffer.WriteByte(buf, ep.Reliability<<5|func() byte {
 		if ep.HasSplit {
 			return 1 << 4
 		}
 		return 0
 	}())
-	buf.WriteShort(uint16(len(ep.Payload)) << 3)
+	buffer.WriteShort(buf, uint16(ep.Len())<<3)
 	if ep.Reliability > 0 {
-		buf.Write(func() []byte {
-			buf := new(buffer.Buffer)
+		buffer.Write(buf, func() []byte {
+			buf := new(bytes.Buffer)
 			if ep.Reliability >= 2 && ep.Reliability != 5 {
-				buf.WriteLTriad(ep.MessageIndex)
+				buffer.WriteLTriad(buf, ep.MessageIndex)
 			}
 			if ep.Reliability <= 4 && ep.Reliability != 2 {
-				buf.WriteLTriad(ep.OrderIndex)
-				buf.WriteByte(ep.OrderChannel)
+				buffer.WriteLTriad(buf, ep.OrderIndex)
+				buffer.WriteByte(buf, ep.OrderChannel)
 			}
-			return buf.Done()
+			return buf.Bytes()
 		}())
 	}
 	if ep.HasSplit {
-		buf.WriteInt(ep.SplitCount)
-		buf.WriteShort(ep.SplitID)
-		buf.WriteInt(ep.SplitIndex)
+		buffer.WriteInt(buf, ep.SplitCount)
+		buffer.WriteShort(buf, ep.SplitID)
+		buffer.WriteInt(buf, ep.SplitIndex)
 	}
-	buf.Append(ep.Buffer)
+	b := ep.Buffer.Bytes()
+	buffer.Write(buf, b)
 	return
 }
 
 // DataPacket is a packet struct, containing Raknet data packet fields.
 type DataPacket struct {
-	*buffer.Buffer
+	*bytes.Buffer
 	Head      byte
 	SendTime  time.Time
 	SeqNumber uint32 // LE Triad
@@ -128,20 +132,17 @@ type DataPacket struct {
 
 // Decode decodes buffer to struct fields and decapsulates all packets.
 func (dp *DataPacket) Decode() {
-	dp.Offset = 0
-	dp.Head = dp.ReadByte()
-	dp.SeqNumber = dp.ReadLTriad()
-	for dp.Require(1) {
-		b := dp.Read(0)
-		ep := NewEncapsulated(buffer.FromBytes(b))
+	// dp.Head = buffer.ReadByte(dp.Buffer)
+	dp.SeqNumber = buffer.ReadLTriad(dp.Buffer)
+	for dp.Buffer.Len() > 0 {
+		ep := NewEncapsulated(dp.Buffer)
 		dp.Packets = append(dp.Packets, ep)
-		dp.Offset += uint32(ep.TotalLen())
 	}
 	return
 }
 
 // Len returns total buffer length of data packet.
-func (dp *DataPacket) Len() int {
+func (dp *DataPacket) TotalLen() int {
 	length := 4
 	for _, d := range dp.Packets {
 		length += d.TotalLen()
@@ -151,12 +152,11 @@ func (dp *DataPacket) Len() int {
 
 // Encode encodes fields and packets to buffer.
 func (dp *DataPacket) Encode() {
-	dp.Buffer = new(buffer.Buffer)
-	dp.WriteByte(dp.Head)
-	dp.WriteLTriad(dp.SeqNumber)
+	dp.Buffer = new(bytes.Buffer)
+	buffer.WriteByte(dp.Buffer, dp.Head)
+	buffer.WriteLTriad(dp.Buffer, dp.SeqNumber)
 	for _, ep := range dp.Packets {
-		b := ep.Bytes()
-		dp.Write(b.Done())
+		buffer.Write(dp.Buffer, ep.Bytes().Bytes())
 	}
 	return
 }

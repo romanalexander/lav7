@@ -7,30 +7,7 @@ import (
 	"net"
 	"testing"
 	"time"
-
-	"github.com/L7-MCPE/lav7/util/buffer"
 )
-
-func TestRequire(t *testing.T) {
-	pk := buffer.FromBytes([]byte("\x00\x00\x00\x00\x00\x00"))
-	if !pk.Require(6) {
-		t.Errorf("Require test failed: payload 6, read 0, required 6, return value=false")
-		return
-	}
-	pk.Read(4)
-	if !pk.Require(2) {
-		t.Errorf("Require test failed: payload 6, read 4, required 2, return value=false")
-		return
-	}
-	if pk.Require(3) {
-		t.Errorf("Require test failed: payload 6, read 4, required 3, return value=true")
-		return
-	}
-	pk.Read(2)
-	if pk.Require(1) {
-		t.Errorf("Require test failed: payload 6, read 6, required 1, return value=true")
-	}
-}
 
 type ReadCase struct {
 	Total      uint64
@@ -58,7 +35,7 @@ func TestRead(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		pk := buffer.FromBytes(make([]byte, c.Total))
+		pk := bytes.NewBuffer(make([]byte, c.Total))
 		if pk.Head() != 0 {
 			t.Error("Head test failed: Expected 0, got", pk.Head())
 			return
@@ -69,7 +46,7 @@ func TestRead(t *testing.T) {
 			return
 		}
 	}
-	pk := buffer.FromBytes([]byte("\xe8\x0f\x0d\xfd\x3f\xdd\xdd\x00\x0a\x00\xfd\xff\xfd\x00\x00\x64\x01\x04"))
+	pk := bytes.NewBuffer([]byte("\xe8\x0f\x0d\xfd\x3f\xdd\xdd\x00\x0a\x00\xfd\xff\xfd\x00\x00\x64\x01\x04"))
 	if n, err := pk.ReadByte(); err != nil || n != 232 {
 		t.Error("ReadByte test failed:", pk, "Result:", n, "Expected: 232", "Error exists: ", err != nil)
 	}
@@ -85,14 +62,14 @@ func TestRead(t *testing.T) {
 	if n, err := pk.ReadLTriad(); err != nil || n != 262500 {
 		t.Error("ReadLTriad test failed:", pk, "Result:", n, "Expected: 262500", "Error exists: ", err != nil)
 	}
-	pk = buffer.FromBytes(append([]byte{0x00, 0x0d}, []byte("Hello, 世界")...))
+	pk = bytes.NewBuffer(append([]byte{0x00, 0x0d}, []byte("Hello, 世界")...))
 	if s, err := pk.ReadString(); err != nil || s != "Hello, 世界" {
 		t.Error("ReadString tets failed:", pk, "Result:", s, "Expected: Hello, 世界", "Error exists: ", err != nil)
 	}
 }
 
 func TestWrite(t *testing.T) {
-	pk := new(buffer.Buffer)
+	pk := new(bytes.Buffer)
 	pk.WriteByte(4)
 	pk.WriteShort(523)
 	pk.WriteInt(153925)
@@ -141,7 +118,7 @@ func TestEncapsulated(t *testing.T) {
 		if err != nil {
 			panic(fmt.Sprint("Error while decoding base64 payload:", err))
 		}
-		if ep, err = NewEncapsulated(buffer.FromBytes(b)); err != nil {
+		if ep, err = NewEncapsulated(bytes.NewBuffer(b)); err != nil {
 			t.Error("Error while creating new EncapsulatedPacket:", err)
 			return
 		}
@@ -149,7 +126,7 @@ func TestEncapsulated(t *testing.T) {
 			t.Error("EncapsulatedPacket length test failed:", ep.TotalLen(), "!=", test.Length, ep)
 			return
 		}
-		var buf *buffer.Buffer
+		var buf *bytes.Buffer
 		if buf, err = ep.Bytes(); err != nil {
 			t.Error("Error while encoding EncapsulatedPacket:", err)
 			return
@@ -168,17 +145,17 @@ func TestDataPacket(t *testing.T) {
 	dp.SendTime = *new(time.Time)
 	dp.Packets = make([]*EncapsulatedPacket, 0)
 	b, _ := base64.StdEncoding.DecodeString("kACQBAAAIAAAAgAAAAMACAAAAAE1MTUxNTE1MTUxNTE1MTUxNTE=")
-	ep, _ := NewEncapsulated(buffer.FromBytes(b))
+	ep, _ := NewEncapsulated(bytes.NewBuffer(b))
 	dp.Packets = append(dp.Packets, ep)
 	b, _ = base64.StdEncoding.DecodeString("MACQIAAAAgAAAAMACAAAAAE1MTUxNTE1MTUxNTE1MTUxNTE=")
-	ep, _ = NewEncapsulated(buffer.FromBytes(b))
+	ep, _ = NewEncapsulated(bytes.NewBuffer(b))
 	dp.Packets = append(dp.Packets, ep)
 	if err := dp.Encode(); err != nil {
 		t.Error("Error while encoding DataPacket:", err)
 		return
 	}
 	dp = &DataPacket{
-		Buffer:    buffer.FromBytes(dp.Done()),
+		Buffer:    bytes.NewBuffer(dp.Done()),
 		SeqNumber: 0,
 		SendTime:  *new(time.Time),
 		Packets:   make([]*EncapsulatedPacket, 0),

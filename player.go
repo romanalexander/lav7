@@ -1,6 +1,7 @@
 package lav7
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -46,7 +47,7 @@ type Player struct {
 
 	inventory PlayerInventory
 
-	recvChan     chan *buffer.Buffer
+	recvChan     chan *bytes.Buffer
 	raknetChan   chan<- *raknet.EncapsulatedPacket
 	callbackChan chan PlayerCallback
 	updateTicker *time.Ticker
@@ -144,8 +145,8 @@ func (p *Player) updateChunk() {
 }
 
 // HandlePacket handles received MCPE packet after raknet connection is established.
-func (p *Player) HandlePacket(b *buffer.Buffer) (err error) {
-	pid := b.ReadByte()
+func (p *Player) HandlePacket(b *bytes.Buffer) (err error) {
+	pid := buffer.ReadByte(b)
 	var pk Packet
 	if pk = GetPacket(pid); pk == nil {
 		return
@@ -216,7 +217,7 @@ func (p *Player) handleDataPacket(pk Packet) (err error) {
 	case *Batch:
 		pk := pk.(*Batch)
 		for _, pp := range pk.Payloads {
-			if err = p.HandlePacket(buffer.FromBytes(pp)); err != nil {
+			if err = p.HandlePacket(bytes.NewBuffer(pp)); err != nil {
 				return
 			}
 		}
@@ -462,20 +463,19 @@ func (p *Player) BroadcastOthers(pk Packet) {
 
 // SendPacket sends given packet to client.
 func (p *Player) SendPacket(pk Packet) {
-	buf := buffer.FromBytes([]byte{0x8e, pk.Pid()})
-	buf.Write(pk.Write().Done())
+	buf := bytes.NewBuffer([]byte{0x8e, pk.Pid()})
+	buffer.Write(buf, pk.Write().Bytes())
 	p.send(buf)
 }
 
 // SendDirect sends given packet without passing to raknetChan channel.
 func (p *Player) SendDirect(pk Packet) {
-	buf := buffer.FromBytes([]byte{0x8e, pk.Pid()})
-	buf.Write(pk.Write().Done())
+	buf := bytes.NewBuffer([]byte{0x8e, pk.Pid()})
+	buffer.Write(buf, pk.Write().Bytes())
 
 	ep := new(raknet.EncapsulatedPacket)
 	ep.Reliability = 2
 	ep.Buffer = buf
-	ep.Buffer.Offset = 0
 
 	raknet.SessionLock.Lock()
 	s, ok := raknet.Sessions[p.Address.String()]
@@ -492,7 +492,7 @@ func (p *Player) SendCompressed(pks ...Packet) {
 		Payloads: make([][]byte, len(pks)),
 	}
 	for i, pk := range pks {
-		batch.Payloads[i] = append([]byte{pk.Pid()}, pk.Write().Done()...)
+		batch.Payloads[i] = append([]byte{pk.Pid()}, pk.Write().Bytes()...)
 	}
 	p.SendPacket(batch)
 }
@@ -504,10 +504,9 @@ func (p *Player) RunAs(callback PlayerCallback) {
 }
 
 // Do not use this method for sending packet to client, this is an internal function.
-func (p *Player) send(buf *buffer.Buffer) {
+func (p *Player) send(buf *bytes.Buffer) {
 	ep := new(raknet.EncapsulatedPacket)
 	ep.Reliability = 2
 	ep.Buffer = buf
-	ep.Buffer.Offset = 0
 	p.raknetChan <- ep
 }

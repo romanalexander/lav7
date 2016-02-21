@@ -1,6 +1,7 @@
 package raknet
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"net"
@@ -21,12 +22,12 @@ type Router struct {
 	sessions      []Session
 	conn          *net.UDPConn
 	sendChan      chan Packet
-	playerAdder   func(*net.UDPAddr) chan<- *buffer.Buffer
+	playerAdder   func(*net.UDPAddr) chan<- *bytes.Buffer
 	playerRemover func(*net.UDPAddr) error
 }
 
 // CreateRouter create/opens new raknet router with given port.
-func CreateRouter(playerAdder func(*net.UDPAddr) chan<- *buffer.Buffer,
+func CreateRouter(playerAdder func(*net.UDPAddr) chan<- *bytes.Buffer,
 	playerRemover func(*net.UDPAddr) error, port uint16) (r *Router, err error) {
 	InitProtocol()
 	Sessions = make(map[string]*Session)
@@ -59,19 +60,20 @@ func (r *Router) receivePacket() {
 			continue
 		} else if n > 0 {
 			atomic.AddUint64(&GotBytes, uint64(n))
-			buf := buffer.FromBytes(recvbuf[0:n])
+			buf := bytes.NewBuffer(recvbuf[0:n])
 			pk := Packet{
 				Buffer:  buf,
 				Address: addr,
 			}
-			if buf.Payload[0] == 0x01 { // Check if the packet is unconnected ping
-				pingID := buf.ReadLong()
-				buf := new(buffer.Buffer)
-				buf.WriteByte(0x1c)
-				buf.WriteLong(pingID)
-				buf.WriteLong(serverID)
+			if c, err := buf.ReadByte(); err == nil && c == 0x01 { // Unconnected ping: no need to create session
+				buf.UnreadByte()
+				pingID := buffer.ReadLong(buf)
+				buf := new(bytes.Buffer)
+				buffer.WriteByte(buf, 0x1c)
+				buffer.WriteLong(buf, pingID)
+				buffer.WriteLong(buf, serverID)
 				buf.Write([]byte(RaknetMagic))
-				buf.WriteString(GetServerString())
+				buffer.WriteString(buf, GetServerString())
 				pk := Packet{
 					Buffer:  buf,
 					Address: addr,
@@ -79,6 +81,7 @@ func (r *Router) receivePacket() {
 				r.sendPacket(pk)
 				continue
 			}
+			buf.UnreadByte()
 			func() {
 				blockLock.Lock()
 				defer blockLock.Unlock()
@@ -100,5 +103,5 @@ func (r *Router) sendAsync() {
 }
 
 func (r *Router) sendPacket(pk Packet) {
-	r.conn.WriteToUDP(pk.Buffer.Payload, pk.Address)
+	r.conn.WriteToUDP(pk.Buffer.Bytes(), pk.Address)
 }

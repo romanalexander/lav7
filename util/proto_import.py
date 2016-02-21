@@ -24,14 +24,14 @@ batch_hardcoded = """type Batch struct {
 
 func (i Batch) Pid() byte { return BatchHead } // 0x92
 
-func (i *Batch) Read(buf *buffer.Buffer) {
+func (i *Batch) Read(buf *bytes.Buffer) {
 	i.Payloads = make([][]byte, 0)
-	payload, err := util.DecodeDeflate(buf.Read(uint32(buf.ReadInt())))
+	payload, err := util.DecodeDeflate(buf.Read(uint32(buffer.ReadInt(buf, ))))
 	if err != nil {
 		log.Println("Error while decompressing Batch payload:", err)
 		return
 	}
-	b := buffer.FromBytes(payload)
+	b := bytes.NewBuffer(payload)
 	for b.Require(4) {
 		size := b.ReadInt()
 		pk := b.Read(size)
@@ -42,14 +42,14 @@ func (i *Batch) Read(buf *buffer.Buffer) {
 	}
 }
 
-func (i Batch) Write() *buffer.Buffer {
-	b := new(buffer.Buffer)
+func (i Batch) Write() *bytes.Buffer {
+	b := new(bytes.Buffer)
 	for _, pk := range i.Payloads {
 		b.WriteInt(uint32(len(pk)))
 		b.Write(pk)
 	}
 	payload := util.EncodeDeflate(b.Done())
-	buf := new(buffer.Buffer)
+	buf := new(bytes.Buffer)
 	buf.BatchWrite(uint32(len(payload)), payload)
 	return buf
 }
@@ -195,7 +195,7 @@ def get_go_code(n: int):
     out += "// Pid implements Packet interface.\nfunc (i %s) Pid() byte { return %sHead }\n\n" % (targets[n][0], targets[n][0])
 
     if len(fields) > 0:
-        out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){\n" % targets[n][0]
+        out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *bytes.Buffer){\n" % targets[n][0]
         for i, field in enumerate(fields):
             if field[0] in phpType:
                 out += "    i.%s = buf.Read%s()\n" % (field[1], field[0])
@@ -207,9 +207,9 @@ def get_go_code(n: int):
                 out += "    // Unexpected code:" + ' '.join(field) + "\n"
         out += "}\n\n"
     else:
-        out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *buffer.Buffer){}\n" % targets[n][0]
+        out += "// Read implements Packet interface.\nfunc (i *%s) Read(buf *bytes.Buffer){}\n" % targets[n][0]
 
-    out += "// Write implements Packet interface.\nfunc (i %s) Write() *buffer.Buffer{\n    buf := new(buffer.Buffer)\n" % targets[n][0]
+    out += "// Write implements Packet interface.\nfunc (i %s) Write() *bytes.Buffer{\n    buf := new(bytes.Buffer)\n" % targets[n][0]
     for i, field in enumerate(fields):
         if field[0] in phpType:
             out += "    buf.Write%s(i.%s)\n" % tuple(field)

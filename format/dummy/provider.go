@@ -7,6 +7,7 @@
 package dummy
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -64,14 +65,14 @@ func (dm *Dummy) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err e
 		return
 	}
 	chunk = new(types.Chunk)
-	buf := buffer.FromBytes(b)
+	buf := bytes.NewBuffer(b)
 	chunk.Mutex().Lock()
-	copy(chunk.BlockData[:], buf.Read(16*16*128))
-	copy(chunk.MetaData[:], buf.Read(16*16*64))
-	copy(chunk.LightData[:], buf.Read(16*16*64))
-	copy(chunk.SkyLightData[:], buf.Read(16*16*64))
-	copy(chunk.HeightMap[:], buf.Read(16*16))
-	copy(chunk.BiomeData[:], buf.Read(16*16*4))
+	copy(chunk.BlockData[:], buf.Next(16*16*128))
+	copy(chunk.MetaData[:], buf.Next(16*16*64))
+	copy(chunk.LightData[:], buf.Next(16*16*64))
+	copy(chunk.SkyLightData[:], buf.Next(16*16*64))
+	copy(chunk.HeightMap[:], buf.Next(16*16))
+	copy(chunk.BiomeData[:], buf.Next(16*16*4))
 	chunk.Mutex().Unlock()
 	return
 
@@ -82,11 +83,11 @@ func (dm *Dummy) WriteChunk(cx, cz int32, c *types.Chunk) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	buf := new(buffer.Buffer)
+	buf := new(bytes.Buffer)
 	c.Mutex().Lock()
 	defer c.Mutex().Unlock()
-	buf.BatchWrite(c.BlockData[:], c.MetaData[:], c.LightData[:], c.SkyLightData[:], c.HeightMap[:], c.BiomeData[:])
-	if err := ioutil.WriteFile(path, buf.Done(), 0644); err != nil {
+	buffer.BatchWrite(buf, c.BlockData[:], c.MetaData[:], c.LightData[:], c.SkyLightData[:], c.HeightMap[:], c.BiomeData[:])
+	if err := ioutil.WriteFile(path, buf.Bytes(), 0644); err != nil {
 		return err
 	}
 	return nil

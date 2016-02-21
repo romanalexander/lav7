@@ -1,6 +1,7 @@
 package lav7
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -12,11 +13,10 @@ import (
 	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/types"
-	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
 // RegisterPlayer registers player to the server and returns packet handler function for it.
-func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
+func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *bytes.Buffer) {
 	identifier := addr.String()
 	if _, ok := Players[identifier]; ok {
 		fmt.Println("Duplicate authentication from", addr)
@@ -29,7 +29,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *buffer.Buffer) {
 	p.EntityID = atomic.AddUint64(&LastEntityID, 1)
 	p.playerShown = make(map[uint64]struct{})
 
-	ch := make(chan *buffer.Buffer, 64)
+	ch := make(chan *bytes.Buffer, 64)
 	p.recvChan = ch
 	p.raknetChan = raknet.Sessions[identifier].PlayerChan
 	p.callbackChan = make(chan PlayerCallback, 128)

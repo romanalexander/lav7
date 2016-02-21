@@ -1,155 +1,149 @@
-// Package buffer provides buffer struct and functions to handle binary streams.
+// Package buffer provides simple functions for processing with go's internal bytes.Buffer struct.
 package buffer
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"net"
-
-	"github.com/L7-MCPE/lav7/util"
 )
 
-// Buffer contains packet payload, serves binary functions for efficiency
-type Buffer struct {
-	Payload []byte
-	Offset  uint32
+// Overflow is an error indicates the reader could not read as you requested.
+type Overflow struct {
+	Need   int
+	Got    int
+	Buffer *bytes.Buffer
 }
 
-// FromBytes converts byte array to Buffer struct
-func FromBytes(buf []byte) *Buffer {
-	return &Buffer{
-		Payload: buf,
-		Offset:  0,
-	}
+// Error implements the error interface.
+func (e Overflow) Error() string {
+	return fmt.Sprintf("Overflow: Needed %d, got %d", e.Need, e.Got)
 }
 
-// Append appends given buffer to payload.
-func (buf *Buffer) Append(b *Buffer) {
-	buf.Payload = append(buf.Payload, b.Payload...)
+// StringOverflowError represents the given string is too long for write
+type StringOverflow struct {
+	Length int
 }
 
-// Done resets entire buffer and returns payload.
-func (buf *Buffer) Done() (b []byte) {
-	b = buf.Payload
-	buf.Payload = make([]byte, 0)
-	buf.Offset = 0
-	return
+// Error implements the error interface.
+func (err StringOverflow) Error() string {
+	return fmt.Sprintf("String too long: Given string is %d characters long, it overflows uint16(65535)", err.Length)
 }
 
-// Head returns the first byte of packet payload.
-func (buf *Buffer) Head() byte {
-	if len(buf.Payload) > 0 {
-		return buf.Payload[0]
-	}
-	return 0
-}
-
-// Require returns true if packet has needed unread bytes from buffer, otherwise false.
-func (buf *Buffer) Require(need uint32) bool {
-	if uint32(len(buf.Payload)) < buf.Offset+need {
-		return false
-	}
-	return true
-}
-
-// Read reads given byte from buffer.
-func (buf *Buffer) Read(length uint32) (r []byte) {
-	if length == 0 {
-		if buf.Require(1) {
-			return buf.Payload[buf.Offset:]
+// Read reads n bytes of data from buf. If buf returns smaller slice than n, returns OverFlow.
+func Read(buf *bytes.Buffer, n int) (b []byte, err error) {
+	if b = buf.Next(n); n != len(b) {
+		err = Overflow{
+			Need:   n,
+			Got:    len(b),
+			Buffer: buf,
 		}
-		panic(util.EOFError{
-			BufLen:    buf.Len(),
-			BufOffset: buf.Offset,
-			Needed:    0,
-			Buf:       buf.Payload,
-		}.Error())
+		return
 	}
-	if !buf.Require(length) {
-		panic(util.EOFError{
-			BufLen:    buf.Len(),
-			BufOffset: buf.Offset,
-			Needed:    length,
-			Buf:       buf.Payload,
-		}.Error())
-	}
-	r = buf.Payload[buf.Offset : buf.Offset+length]
-	buf.Offset += length
 	return
 }
 
 // ReadAny reads appropriate type from given reference value.
-func (buf *Buffer) ReadAny(p interface{}) {
+func ReadAny(buf *bytes.Buffer, p interface{}) {
 	switch p.(type) {
 	case *bool:
-		*p.(*bool) = buf.ReadBool()
+		*p.(*bool) = ReadBool(buf)
 	case *byte:
-		*p.(*byte) = buf.ReadByte()
+		*p.(*byte) = ReadByte(buf)
 	case *uint16:
-		*p.(*uint16) = buf.ReadShort()
+		*p.(*uint16) = ReadShort(buf)
 	case *uint32:
-		*p.(*uint32) = buf.ReadInt()
+		*p.(*uint32) = ReadInt(buf)
 	case *uint64:
-		*p.(*uint64) = buf.ReadLong()
+		*p.(*uint64) = ReadLong(buf)
 	case *float32:
-		*p.(*float32) = buf.ReadFloat()
+		*p.(*float32) = ReadFloat(buf)
 	case *float64:
-		*p.(*float64) = buf.ReadDouble()
+		*p.(*float64) = ReadDouble(buf)
 	case *string:
-		*p.(*string) = buf.ReadString()
+		*p.(*string) = ReadString(buf)
 	case *net.UDPAddr:
-		*p.(*net.UDPAddr) = *buf.ReadAddress()
+		var addr *net.UDPAddr
+		addr = ReadAddress(buf)
+		*p.(*net.UDPAddr) = *addr
+	case **net.UDPAddr:
+		*p.(**net.UDPAddr) = ReadAddress(buf)
 	case byte, uint16, uint32,
-		uint64, float32, float64, string:
+		uint64, float32, float64, string, net.UDPAddr:
 		panic("ReadAny requires reference type")
+	default:
+		panic("Unsupported type for ReadAny")
 	}
 }
 
 // BatchRead batches ReadAny from given reference pointers.
-func (buf *Buffer) BatchRead(p ...interface{}) {
+func BatchRead(buf *bytes.Buffer, p ...interface{}) {
 	for _, pp := range p {
-		buf.ReadAny(pp)
+		ReadAny(buf, pp)
 	}
 }
 
 // ReadBool reads boolean from buffer.
-func (buf *Buffer) ReadBool() bool {
-	return buf.ReadByte() > 0
+func ReadBool(buf *bytes.Buffer) bool {
+	b, err := Read(buf, 1)
+	if err != nil {
+		panic(err)
+	}
+	return b[0] > 0
 }
 
 // ReadByte reads unsigned byte from buffer.
-func (buf *Buffer) ReadByte() byte {
-	b := buf.Read(1)
+func ReadByte(buf *bytes.Buffer) byte {
+	b, err := Read(buf, 1)
+	if err != nil {
+		panic(err)
+	}
 	return b[0]
 }
 
 // ReadShort reads unsigned short from buffer.
-func (buf *Buffer) ReadShort() uint16 {
-	b := buf.Read(2)
+func ReadShort(buf *bytes.Buffer) uint16 {
+	b, err := Read(buf, 2)
+	if err != nil {
+		panic(err)
+	}
 	return uint16(b[0])<<8 | uint16(b[1])
 }
 
 // ReadLShort reads unsigned little-endian short from buffer.
-func (buf *Buffer) ReadLShort() uint16 {
-	b := buf.Read(2)
+func ReadLShort(buf *bytes.Buffer) uint16 {
+	b, err := Read(buf, 2)
+	if err != nil {
+		panic(err)
+	}
 	return uint16(b[1])<<8 | uint16(b[0])
 }
 
 // ReadInt reads unsigned int from buffer.
-func (buf *Buffer) ReadInt() uint32 {
-	b := buf.Read(4)
+func ReadInt(buf *bytes.Buffer) uint32 {
+	b, err := Read(buf, 4)
+	if err != nil {
+		panic(err)
+	}
 	return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
 }
 
 // ReadLInt reads unsigned little-endian int from buffer.
-func (buf *Buffer) ReadLInt() uint32 {
-	b := buf.Read(4)
+func ReadLInt(buf *bytes.Buffer) uint32 {
+	b, err := Read(buf, 4)
+	if err != nil {
+		panic(err)
+	}
 	return uint32(b[3])<<24 | uint32(b[2])<<16 | uint32(b[1])<<8 | uint32(b[0])
 }
 
 // ReadLong reads unsigned long from buffer.
-func (buf *Buffer) ReadLong() uint64 {
-	b := buf.Read(8)
+func ReadLong(buf *bytes.Buffer) uint64 {
+	b, err := Read(buf, 8)
+	if err != nil {
+		panic(err)
+	}
 	return uint64(b[0])<<56 | uint64(b[1])<<48 |
 		uint64(b[2])<<40 | uint64(b[3])<<32 |
 		uint64(b[4])<<24 | uint64(b[5])<<16 |
@@ -157,8 +151,11 @@ func (buf *Buffer) ReadLong() uint64 {
 }
 
 // ReadLLong reads unsigned little-endian long from buffer.
-func (buf *Buffer) ReadLLong() uint64 {
-	b := buf.Read(8)
+func ReadLLong(buf *bytes.Buffer) uint64 {
+	b, err := Read(buf, 8)
+	if err != nil {
+		panic(err)
+	}
 	return uint64(b[7])<<56 | uint64(b[6])<<48 |
 		uint64(b[5])<<40 | uint64(b[4])<<32 |
 		uint64(b[3])<<24 | uint64(b[2])<<16 |
@@ -166,45 +163,55 @@ func (buf *Buffer) ReadLLong() uint64 {
 }
 
 // ReadFloat reads 32-bit float from buffer.
-func (buf *Buffer) ReadFloat() float32 {
-	return math.Float32frombits(buf.ReadInt())
+func ReadFloat(buf *bytes.Buffer) float32 {
+	r := ReadInt(buf)
+	return math.Float32frombits(r)
 }
 
 // ReadDouble reads 64-bit float from buffer.
-func (buf *Buffer) ReadDouble() float64 {
-	return math.Float64frombits(buf.ReadLong())
+func ReadDouble(buf *bytes.Buffer) float64 {
+	r := ReadLong(buf)
+	return math.Float64frombits(r)
 }
 
 // ReadTriad reads unsigned 3-bytes triad from buffer.
-func (buf *Buffer) ReadTriad() uint32 {
-	b := buf.Read(3)
+func ReadTriad(buf *bytes.Buffer) uint32 {
+	b, err := Read(buf, 3)
+	if err != nil {
+		panic(err)
+	}
 	return uint32(b[0])<<16 | uint32(b[1])<<8 | uint32(b[2])
 }
 
 // ReadLTriad reads unsigned little-endian 3-bytes triad from buffer.
-func (buf *Buffer) ReadLTriad() uint32 {
-	b := buf.Read(3)
+func ReadLTriad(buf *bytes.Buffer) uint32 {
+	b, err := Read(buf, 3)
+	if err != nil {
+		panic(err)
+	}
 	return uint32(b[2])<<16 | uint32(b[1])<<8 | uint32(b[0])
 }
 
 // ReadString reads string from buffer.
-func (buf *Buffer) ReadString() (str string) {
-	var l uint16
-	l = buf.ReadShort()
-	var b []byte
-	b = buf.Read(uint32(l))
+func ReadString(buf *bytes.Buffer) (str string) {
+	b, err := Read(buf, int(ReadShort(buf)))
+	if err != nil {
+		panic(err)
+	}
 	return string(b)
 }
 
 // ReadAddress reads IP address/port from buffer.
-func (buf *Buffer) ReadAddress() (addr *net.UDPAddr) {
-	var v byte
-	v = buf.ReadByte()
+func ReadAddress(buf *bytes.Buffer) (addr *net.UDPAddr) {
+	v := ReadByte(buf)
 	if v != 4 {
-		panic(fmt.Sprintf("Expected IPv4, got IP version %d", v))
+		panic(fmt.Sprintf("ReadAddress got unsupported IP version %d", v))
 	}
-	b := buf.Read(4)
-	p := buf.ReadShort()
+	b, err := Read(buf, 4)
+	if err != nil {
+		panic(err)
+	}
+	p := ReadShort(buf)
 	return &net.UDPAddr{
 		IP:   append([]byte{b[0] ^ 0xff}, b[1]^0xff, b[2]^0xff, b[3]^0xff),
 		Port: int(p),
@@ -212,71 +219,72 @@ func (buf *Buffer) ReadAddress() (addr *net.UDPAddr) {
 }
 
 // Write writes given byte array to buffer.
-func (buf *Buffer) Write(b []byte) error {
-	if buf.Len()+len(b) > 1024*1024*256 {
-		return util.LargeBufferError{
-			OldCap: buf.Len(),
-			Append: len(b),
+func Write(buf *bytes.Buffer, b []byte) error {
+	n, err := buf.Write(b)
+	if err == nil && n != len(b) {
+		err = Overflow{
+			Need:   len(b),
+			Got:    n,
+			Buffer: buf,
 		}
 	}
-	buf.Payload = append(buf.Payload, b...)
-	return nil
+	return err
 }
 
 // WriteAny writes appropriate type from given interface{} value to buffer.
-func (buf *Buffer) WriteAny(p interface{}) {
+func WriteAny(buf *bytes.Buffer, p interface{}) {
 	switch p.(type) {
 	case bool:
-		buf.WriteBool(p.(bool))
+		WriteBool(buf, p.(bool))
 	case byte:
-		buf.WriteByte(p.(byte))
+		WriteByte(buf, p.(byte))
 	case uint16:
-		buf.WriteShort(p.(uint16))
+		WriteShort(buf, p.(uint16))
 	case uint32:
-		buf.WriteInt(p.(uint32))
+		WriteInt(buf, p.(uint32))
 	case uint64:
-		buf.WriteLong(p.(uint64))
+		WriteLong(buf, p.(uint64))
 	case float32:
-		buf.WriteFloat(p.(float32))
+		WriteFloat(buf, p.(float32))
 	case float64:
-		buf.WriteDouble(p.(float64))
+		WriteDouble(buf, p.(float64))
 	case string:
-		buf.WriteString(p.(string))
+		WriteString(buf, p.(string))
 	case []byte:
-		buf.Write(p.([]byte))
+		Write(buf, p.([]byte))
 	case *bool:
-		buf.WriteBool(*p.(*bool))
+		WriteBool(buf, *p.(*bool))
 	case *byte:
-		buf.WriteByte(*p.(*byte))
+		WriteByte(buf, *p.(*byte))
 	case *uint16:
-		buf.WriteShort(*p.(*uint16))
+		WriteShort(buf, *p.(*uint16))
 	case *uint32:
-		buf.WriteInt(*p.(*uint32))
+		WriteInt(buf, *p.(*uint32))
 	case *uint64:
-		buf.WriteLong(*p.(*uint64))
+		WriteLong(buf, *p.(*uint64))
 	case *float32:
-		buf.WriteFloat(*p.(*float32))
+		WriteFloat(buf, *p.(*float32))
 	case *float64:
-		buf.WriteDouble(*p.(*float64))
+		WriteDouble(buf, *p.(*float64))
 	case *string:
-		buf.WriteString(*p.(*string))
+		WriteString(buf, *p.(*string))
 	case *[]byte:
-		buf.Write(*p.(*[]byte))
+		Write(buf, *p.(*[]byte))
 	case *net.UDPAddr:
-		buf.WriteAddress(p.(*net.UDPAddr))
+		WriteAddress(buf, p.(*net.UDPAddr))
 	}
 }
 
 // BatchWrite batches WriteAny from given values.
-func (buf *Buffer) BatchWrite(p ...interface{}) {
+func BatchWrite(buf *bytes.Buffer, p ...interface{}) {
 	for _, pp := range p {
-		buf.WriteAny(pp)
+		WriteAny(buf, pp)
 	}
 }
 
 // WriteBool writes boolean to buffer.
-func (buf *Buffer) WriteBool(n bool) error {
-	return buf.WriteByte(func() byte {
+func WriteBool(buf *bytes.Buffer, n bool) {
+	WriteByte(buf, func() byte {
 		if n {
 			return 1
 		} else {
@@ -286,97 +294,107 @@ func (buf *Buffer) WriteBool(n bool) error {
 }
 
 // WriteByte writes unsigned byte to buffer.
-func (buf *Buffer) WriteByte(n byte) error {
-	return buf.Write([]byte{n})
+func WriteByte(buf *bytes.Buffer, n byte) {
+	if err := Write(buf, []byte{n}); err != nil {
+		panic(err)
+	}
 }
 
 // WriteShort writes unsigned short to buffer.
-func (buf *Buffer) WriteShort(n uint16) error {
-	return buf.Write([]byte{byte(n >> 8), byte(n)})
+func WriteShort(buf *bytes.Buffer, n uint16) {
+	if err := Write(buf, []byte{byte(n >> 8), byte(n)}); err != nil {
+		panic(err)
+	}
 }
 
 // WriteLShort writes unsigned little-endian short to buffer.
-func (buf *Buffer) WriteLShort(n uint16) error {
-	return buf.Write([]byte{byte(n), byte(n >> 8)})
+func WriteLShort(buf *bytes.Buffer, n uint16) {
+	if err := Write(buf, []byte{byte(n), byte(n >> 8)}); err != nil {
+		panic(err)
+	}
 }
 
 // WriteInt writes unsigned int to buffer.
-func (buf *Buffer) WriteInt(n uint32) error {
-	return buf.Write([]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)})
+func WriteInt(buf *bytes.Buffer, n uint32) {
+	if err := Write(buf, []byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)}); err != nil {
+		panic(err)
+	}
 }
 
 // WriteLInt writes unsigned little-endian int to buffer.
-func (buf *Buffer) WriteLInt(n uint32) error {
-	return buf.Write([]byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)})
+func WriteLInt(buf *bytes.Buffer, n uint32) {
+	if err := Write(buf, []byte{byte(n), byte(n >> 8), byte(n >> 16), byte(n >> 24)}); err != nil {
+		panic(err)
+	}
 }
 
 // WriteLong writes unsigned long to buffer.
-func (buf *Buffer) WriteLong(n uint64) error {
-	return buf.Write([]byte{
+func WriteLong(buf *bytes.Buffer, n uint64) {
+	if err := Write(buf, []byte{
 		byte(n >> 56), byte(n >> 48),
 		byte(n >> 40), byte(n >> 32),
 		byte(n >> 24), byte(n >> 16),
 		byte(n >> 8), byte(n),
-	})
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // WriteLLong writes unsigned little-endian long to buffer.
-func (buf *Buffer) WriteLLong(n uint64) error {
-	return buf.Write([]byte{
+func WriteLLong(buf *bytes.Buffer, n uint64) {
+	if err := Write(buf, []byte{
 		byte(n), byte(n >> 8),
 		byte(n >> 16), byte(n >> 24),
 		byte(n >> 32), byte(n >> 40),
 		byte(n >> 48), byte(56),
-	})
+	}); err != nil {
+		panic(err)
+	}
 }
 
 // WriteFloat writes 32-bit float to buffer.
-func (buf *Buffer) WriteFloat(f float32) error {
-	return buf.WriteInt(math.Float32bits(f))
+func WriteFloat(buf *bytes.Buffer, f float32) {
+	WriteInt(buf, math.Float32bits(f))
 }
 
 // WriteDouble writes 64-bit float to buffer.
-func (buf *Buffer) WriteDouble(f float64) error {
-	return buf.WriteLong(math.Float64bits(f))
+func WriteDouble(buf *bytes.Buffer, f float64) {
+	WriteLong(buf, math.Float64bits(f))
 }
 
 // WriteTriad writes unsigned 3-bytes triad to buffer.
-func (buf *Buffer) WriteTriad(n uint32) error {
-	return buf.Write([]byte{byte(n >> 16), byte(n >> 8), byte(n)})
+func WriteTriad(buf *bytes.Buffer, n uint32) {
+	if err := Write(buf, []byte{byte(n >> 16), byte(n >> 8), byte(n)}); err != nil {
+		panic(err)
+	}
 }
 
 // WriteLTriad writes unsigned little-endian 3-bytes triad to buffer.
-func (buf *Buffer) WriteLTriad(n uint32) error {
-	return buf.Write([]byte{byte(n), byte(n >> 8), byte(n >> 16)})
+func WriteLTriad(buf *bytes.Buffer, n uint32) error {
+	return Write(buf, []byte{byte(n), byte(n >> 8), byte(n >> 16)})
 }
 
-// WriteString writes string to buffer
-func (buf *Buffer) WriteString(s string) (err error) {
+// WriteString writes string to buffer.
+func WriteString(buf *bytes.Buffer, s string) {
 	if len(s) > 65535 {
-		return util.StringOverflowError{
+		panic(StringOverflow{
 			Length: len(s),
-		}
+		})
 	}
-	if err = buf.WriteShort(uint16(len(s))); err != nil {
-		return
-	}
-	return buf.Write([]byte(s))
+	WriteShort(buf, uint16(len(s)))
+	Write(buf, []byte(s))
 }
 
 // WriteAddress writes net.UDPAddr address to buffer.
-func (buf *Buffer) WriteAddress(i *net.UDPAddr) (err error) {
-	if err = buf.WriteByte(4); err != nil {
-		return
-	}
+func WriteAddress(buf *bytes.Buffer, i *net.UDPAddr) {
+	WriteByte(buf, 4)
 	for _, v := range i.IP.To4() {
-		if err = buf.WriteByte(v ^ 0xff); err != nil {
-			return
-		}
+		WriteByte(buf, v^0xff)
 	}
-	return buf.WriteShort(uint16(i.Port))
+	WriteShort(buf, uint16(i.Port))
 }
 
-// Len returns the number of the bytes of the entire buffer.
-func (buf *Buffer) Len() int {
-	return len(buf.Payload)
+// Dump prints hexdump for given buffer.
+func Dump(buf *bytes.Buffer) {
+	fmt.Print(hex.Dump(buf.Bytes()))
 }

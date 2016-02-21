@@ -15,16 +15,17 @@ type Item struct {
 	Compound *nbt.Compound
 }
 
-func (i *Item) Read(buf *buffer.Buffer) {
-	i.ID = ID(buf.ReadShort())
+func (i *Item) Read(buf *bytes.Buffer) {
+	i.ID = ID(buffer.ReadShort(buf))
 	if i.ID == 0 {
 		return
 	}
-	i.Amount = buf.ReadByte()
-	i.Meta = buf.ReadShort()
-	length := uint32(buf.ReadShort())
+	i.Amount = buffer.ReadByte(buf)
+	i.Meta = buffer.ReadShort(buf)
+	length := uint32(buffer.ReadShort(buf))
 	if length > 0 {
-		compound := bytes.NewBuffer(buf.Read(length))
+		b, _ := buffer.Read(buf, int(length))
+		compound := bytes.NewBuffer(b)
 		i.Compound = new(nbt.Compound)
 		i.Compound.ReadFrom(compound)
 	}
@@ -34,15 +35,15 @@ func (i Item) Write() []byte {
 	if i.ID == 0 {
 		return []byte{0, 0}
 	}
-	buf := new(buffer.Buffer)
-	buf.WriteShort(uint16(i.ID))
-	buf.WriteByte(i.Amount)
-	buf.WriteShort(i.Meta)
+	buf := new(bytes.Buffer)
+	buffer.WriteShort(buf, uint16(i.ID))
+	buffer.WriteByte(buf, i.Amount)
+	buffer.WriteShort(buf, i.Meta)
 	compound := new(bytes.Buffer)
 	i.Compound.WriteTo(compound)
-	buf.WriteShort(uint16(compound.Len()))
+	buffer.WriteShort(buf, uint16(compound.Len()))
 	buf.Write(compound.Bytes())
-	return buf.Done()
+	return buf.Bytes()
 }
 
 func (i Item) Block() Block {

@@ -1,10 +1,12 @@
 package raknet
 
 import (
+	"bytes"
 	"log"
 	"math"
 	"math/rand"
 	"net"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,7 +29,7 @@ var timeout = time.Millisecond * 1500
 
 // GetSession returns session with given identifier if exists, or creates new one.
 func GetSession(address *net.UDPAddr, sendChannel chan Packet,
-	playerAdder func(*net.UDPAddr) chan<- *buffer.Buffer,
+	playerAdder func(*net.UDPAddr) chan<- *bytes.Buffer,
 	playerRemover func(*net.UDPAddr) error) *Session {
 	SessionLock.Lock()
 	defer SessionLock.Unlock()
@@ -52,7 +54,7 @@ type Session struct {
 	ReceivedChan chan Packet              // Packet from router
 	SendChan     chan Packet              // Send request to router
 	PlayerChan   chan *EncapsulatedPacket // Send request from player
-	packetChan   chan<- *buffer.Buffer    // Packet delivery to player
+	packetChan   chan<- *bytes.Buffer     // Packet delivery to player
 
 	ID           uint64
 	Address      *net.UDPAddr
@@ -78,7 +80,7 @@ type Session struct {
 	messageIndex uint32
 	channelIndex [8]uint32
 
-	playerAdder   func(*net.UDPAddr) chan<- *buffer.Buffer
+	playerAdder   func(*net.UDPAddr) chan<- *bytes.Buffer
 	playerRemover func(*net.UDPAddr) error
 	pingTries     uint64
 	closed        chan struct{}
@@ -143,8 +145,8 @@ func (s *Session) update() {
 			i++
 		}
 		buf := EncodeAck(acks)
-		b := buffer.FromBytes([]byte{0xc0})
-		b.Append(buf)
+		b := bytes.NewBuffer([]byte{0xc0})
+		buffer.Write(b, buf.Bytes())
 		s.send(b)
 		s.ackQueue = make(map[uint32]bool)
 	}
@@ -156,8 +158,8 @@ func (s *Session) update() {
 			i++
 		}
 		buf := EncodeAck(nacks)
-		b := buffer.FromBytes([]byte{0xa0})
-		b.Append(buf)
+		b := bytes.NewBuffer([]byte{0xa0})
+		buffer.Write(b, buf.Bytes())
 		s.send(b)
 		s.nackQueue = make(map[uint32]bool)
 	}
@@ -182,8 +184,18 @@ func (s *Session) update() {
 }
 
 func (s *Session) handlePacket(pk Packet) {
-	// TODO: Panic recovery
-	head := pk.ReadByte()
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		if or, ok := r.(buffer.Overflow); ok {
+			log.Println("Recovering panic:", r)
+			buffer.Dump(or.Buffer)
+			debug.PrintStack()
+		}
+	}()
+	head := buffer.ReadByte(pk.Buffer)
 	if head != 0xa0 && head != 0xc0 {
 		s.timeout.Reset(func() time.Duration {
 			if s.Status != 3 {
@@ -238,11 +250,11 @@ func (s *Session) joinSplits(ep *EncapsulatedPacket) {
 		tab = s.splitTable[ep.SplitID]
 	}
 	if _, ok := tab[ep.SplitIndex]; !ok {
-		tab[ep.SplitIndex] = ep.Buffer.Done()
+		tab[ep.SplitIndex] = ep.Buffer.Bytes()
 	}
 	if len(tab) == int(ep.SplitCount) {
 		sep := new(EncapsulatedPacket)
-		sep.Buffer = new(buffer.Buffer)
+		sep.Buffer = new(bytes.Buffer)
 		for i := uint32(0); i < ep.SplitCount; i++ {
 			sep.Write(tab[i])
 		}
@@ -258,7 +270,7 @@ func (s *Session) handleEncapsulated(ep *EncapsulatedPacket) {
 		}
 		return
 	}
-	head := ep.ReadByte()
+	head := buffer.ReadByte(ep.Buffer)
 
 	if s.Status > 2 && head == 0x8e {
 		s.packetChan <- ep.Buffer
@@ -290,19 +302,16 @@ func (s *Session) SendEncapsulated(ep *EncapsulatedPacket) {
 		s.splitID++
 		splitID := s.splitID
 		splitIndex := uint32(0)
-		for !ep.Require(1) {
-			readSize := uint32(s.mtuSize) - 34
-			if uint32(ep.Buffer.Len())-ep.Offset < readSize {
-				readSize = uint32(ep.Buffer.Len()) - ep.Offset
-			}
-			buf := ep.Read(readSize)
+		for ep.Buffer.Len() > 0 {
+			readSize := int(s.mtuSize) - 34
+			buf := ep.Next(readSize)
 			sp := new(EncapsulatedPacket)
 			sp.SplitID = splitID
 			sp.HasSplit = true
-			sp.SplitCount = uint32(math.Ceil(float64(ep.Buffer.Len()) / float64(s.mtuSize-34)))
+			sp.SplitCount = uint32(math.Ceil(float64(ep.Len()) / float64(s.mtuSize-34)))
 			sp.Reliability = ep.Reliability
 			sp.SplitIndex = splitIndex
-			sp.Buffer = buffer.FromBytes(buf)
+			sp.Buffer = bytes.NewBuffer(buf)
 			if splitIndex > 0 {
 				sp.MessageIndex = s.messageIndex
 				s.messageIndex++
@@ -334,7 +343,7 @@ func (s *Session) sendEncapsulatedDirect(ep *EncapsulatedPacket) {
 	s.recovery[dp.SeqNumber] = dp
 }
 
-func (s *Session) send(pk *buffer.Buffer) {
+func (s *Session) send(pk *bytes.Buffer) {
 	s.SendChan <- Packet{pk, s.Address}
 }
 
@@ -344,7 +353,7 @@ func (s *Session) Close(reason string) {
 	s.timeout.Stop()
 	s.closed <- struct{}{}
 	s.playerRemover(s.Address)
-	data := &EncapsulatedPacket{Buffer: buffer.FromBytes([]byte{0x15})}
+	data := &EncapsulatedPacket{Buffer: bytes.NewBuffer([]byte{0x15})}
 	s.sendEncapsulatedDirect(data)
 	if s.Status >= 3 {
 		close(s.packetChan)
