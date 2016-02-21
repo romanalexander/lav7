@@ -363,13 +363,10 @@ type ID uint16
 
 // String converts ID to string.
 func (id ID) String() string {
-    switch id {""")
-    for i in numconst:
-        c = numconst[i]
-        print("    case %s:\n        return \"%s\"" % (c, c))
-    print("""    default:
-        return "Unknown"
+    if name, ok := nameMap[id]; ok {
+        return name
     }
+    return "Unknown"
 }
 
 // Block tries to convert item ID to block ID. If fails, it panics.
@@ -406,8 +403,13 @@ func (id ID) Block() byte {
     for n in alias:
         i = constnum[alias[n]]
         print("    \"%s\": %s, // %d" % (n, n, i))
-    print("}")
+    print("}\n")
 
+    print("var nameMap = map[ID]string {")
+    for i in numconst:
+        c = numconst[i]
+        print("    %s: \"%s\", // %d" % (c, c, i))
+    print("}\n")
     print("""
 func StringID(name string) ID {
     if id, ok := idMap[name]; ok {
