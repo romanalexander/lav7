@@ -6,7 +6,7 @@ import (
 	"github.com/L7-MCPE/lav7/types"
 )
 
-// SmapleGenerator is a simple generator concept.
+// SampleGenerator is a simple generator concept.
 type SampleGenerator struct {
 	Cache *types.Chunk
 }
