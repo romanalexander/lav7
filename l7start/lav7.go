@@ -54,7 +54,11 @@ func main() {
 	log.Printf("Build timestamp: %s", lav7.BuildTime)
 
 	start := time.Now()
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	if runtime.NumCPU() < 2 {
+		runtime.GOMAXPROCS(2)
+	} else {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
 	initLevel(5, *img)
 	initRaknet()
 	startLevel()
