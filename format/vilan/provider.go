@@ -39,8 +39,15 @@ func (v *Vilan) Init(name string) {
 func (v *Vilan) Loadable(cx, cz int32) (path string, ok bool) {
 	sectionX, sectionZ := cx>>2, cz>>2
 	path = fmt.Sprintf("levels/%s/section.%d.%d.v", v.name, sectionX, sectionZ)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		log.Println("Error while creating directory:", err)
+		return "", false
+	}
 	file, err := os.Open(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return path, false
+		}
 		log.Println("Error while opening chunk section:", err)
 		return "", false
 	}
@@ -98,8 +105,17 @@ func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	if err != nil {
 		return err
 	}
+	defer file.Close()
+
+	fstat, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
 	fbuf := make([]byte, 2)
-	if _, err := file.Read(fbuf); err != nil {
+	if fstat.Size() < 2 {
+		file.Write(fbuf)
+	} else if _, err := file.Read(fbuf); err != nil {
 		return err
 	}
 
@@ -118,6 +134,9 @@ func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	buffer.BatchWrite(buf, chunk.BlockData[:], chunk.MetaData[:], chunk.LightData[:], chunk.SkyLightData[:], chunk.HeightMap[:], chunk.BiomeData[:])
 
 	pos := 2 + int64(byte(cx&3)<<2|byte(cz&3))*83200
+	if need := pos - fstat.Size(); need > 0 {
+		file.Write(make([]byte, need))
+	}
 	_, err = file.WriteAt(buf.Bytes(), pos)
 	return err
 }
@@ -127,10 +146,10 @@ func (v *Vilan) SaveAll(chunks map[[2]int32]*types.Chunk) error {
 	errstr := ""
 	for k, c := range chunks {
 		if err := v.WriteChunk(k[0], k[1], c); err != nil {
-			fmt.Sprintln(errstr, err.Error())
+			errstr += err.Error()
 		}
 	}
-	if errstr == "" {
+	if errstr != "" {
 		return fmt.Errorf(errstr)
 	}
 	return nil

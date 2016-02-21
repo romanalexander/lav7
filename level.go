@@ -106,20 +106,33 @@ func (lv *Level) ChunkExists(cx, cz int32) bool {
 func (lv *Level) GetChunk(cx, cz int32) *types.Chunk {
 	lv.ChunkMutex.Lock()
 	defer lv.ChunkMutex.Unlock()
+	var err error
 	if c, ok := lv.ChunkMap[[2]int32{cx, cz}]; ok {
 		return c
 	} else if path, ok := lv.Loadable(cx, cz); ok {
-		c, err := lv.LoadChunk(cx, cz, path)
+		if path == "" {
+			goto fallback
+		}
+		var c *types.Chunk
+		c, err = lv.LoadChunk(cx, cz, path)
 		if err != nil {
-			log.Println("Error while loading chunk:", err)
-			log.Println("Using empty chunk anyway.")
-			c = new(types.Chunk)
-			*c = types.FallbackChunk
+			goto fallback
 		}
 		lv.SetChunk(cx, cz, c)
 		return c
 	}
 	return nil
+fallback:
+	if err != nil {
+		log.Println("Error while loading chunk:", err)
+	} else {
+		log.Println("An error occurred while loading chunk.")
+	}
+	log.Println("Using empty chunk anyway.")
+	c := new(types.Chunk)
+	*c = types.FallbackChunk
+	lv.SetChunk(cx, cz, c)
+	return c
 }
 
 // SetChunk sets given chunk to chunk map.
@@ -172,7 +185,9 @@ func (lv *Level) UnloadChunk(cx, cz int32, save bool) error {
 func (lv *Level) Save() {
 	lv.ChunkMutex.Lock()
 	defer lv.ChunkMutex.Unlock()
-	lv.SaveAll(lv.ChunkMap)
+	if err := lv.SaveAll(lv.ChunkMap); err != nil {
+		log.Println("Error while saving level:", err)
+	}
 }
 
 // GetBlock returns block ID on given coordinates.

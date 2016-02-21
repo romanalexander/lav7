@@ -20,6 +20,7 @@ import (
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/command"
 	_ "github.com/L7-MCPE/lav7/format/dummy"
+	_ "github.com/L7-MCPE/lav7/format/vilan"
 	"github.com/L7-MCPE/lav7/gen"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util"
@@ -30,6 +31,7 @@ func main() {
 	mutex := flag.Bool("mutex", false, "trace mutexes for debugging")
 	port := flag.Uint64("port", 19132, "sets server port to given value")
 	img := flag.String("img", "none", "use experimental image chunk creator with given image")
+	format := flag.String("fmt", "vilan", "set level format explicitly")
 	flag.Parse()
 
 	if *ppr {
@@ -59,7 +61,7 @@ func main() {
 	} else {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
-	initLevel(5, *img)
+	initLevel(5, *img, *fmt)
 	initRaknet()
 	startLevel()
 	startRouter(uint16(*port))
@@ -69,7 +71,7 @@ func main() {
 	command.HandleCommand()
 }
 
-func initLevel(genRadius int32, img string) {
+func initLevel(genRadius int32, img string, format string) {
 	var g gen.Generator
 	if img != "none" {
 		log.Print("* Using EXPERIMENTAL image chunk generator")
@@ -103,7 +105,11 @@ func initLevel(genRadius int32, img string) {
 	log.Println("Generator type:", reflect.TypeOf(g))
 	g.Init()
 	log.Println("Generator init done. Initializing level...")
-	p := lav7.GetProvider("dummy")
+	log.Println("Level format type:", fmt)
+	p := lav7.GetProvider(fmt)
+	if p == nil {
+		log.Fatal("Error: cannot find the format provider from server.")
+	}
 	p.Init(lav7.GetDefaultLevel().Name)
 	lav7.GetDefaultLevel().Init(p)
 	lav7.GetDefaultLevel().Gen = g.Gen
