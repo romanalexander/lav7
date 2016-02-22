@@ -147,14 +147,16 @@ func (p *Player) updateChunk() {
 				}
 				continue
 			}
-			go func(cx, cz int32, done <-chan struct{}) {
-				<-done
-				p.chunkNotify <- types.ChunkDelivery{
-					X:     cx,
-					Z:     cz,
-					Chunk: p.Level.GetChunk(cx, cz),
-				}
-			}(req[0], req[1], p.Level.CreateChunk(req[0], req[1]))
+			if ch := p.Level.CreateChunk(req[0], req[1]); ch != nil {
+				go func(cx, cz int32, done <-chan struct{}) {
+					<-done
+					p.chunkNotify <- types.ChunkDelivery{
+						X:     cx,
+						Z:     cz,
+						Chunk: p.Level.GetChunk(cx, cz),
+					}
+				}(req[0], req[1], ch)
+			}
 		}
 	}
 }

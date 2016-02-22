@@ -15,6 +15,8 @@ import (
 var serverID uint64
 var blockList = make(map[string]time.Time)
 var blockLock = new(sync.Mutex)
+
+// GotBytes is a sum of received packet size.
 var GotBytes uint64
 
 // Router handles packets from network, and manages sessions.
@@ -89,7 +91,9 @@ func (r *Router) receivePacket() {
 					r.conn.WriteToUDP([]byte("\x80\x00\x00\x00\x00\x00\x08\x15"), pk.Address)
 				} else {
 					delete(blockList, addr.String())
-					GetSession(addr, r.sendChan, r.playerAdder, r.playerRemover).ReceivedChan <- pk
+					go func() {
+						GetSession(addr, r.sendChan, r.playerAdder, r.playerRemover).ReceivedChan <- pk
+					}()
 				}
 			}()
 		}

@@ -15,8 +15,8 @@ import (
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
-const windowSize = 512
-const chanBufsize = 64
+const windowSize = 2048
+const chanBufsize = 256
 
 // MaxPingTries defines max retry count on ping timeout.
 // If ping timeouts MaxPingTries + 1 times, session will be closed.
