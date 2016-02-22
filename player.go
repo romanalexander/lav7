@@ -12,9 +12,11 @@ import (
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
+	"github.com/davecgh/go-spew/spew"
 )
 
-const radius int32 = 5
+// ChunkRadius is a chunk radius that the player can handle.
+const ChunkRadius int32 = 5
 
 // PlayerCallback is a struct for delivering callbacks to other player goroutines;
 // It is usually used to bypass race issues.
@@ -61,7 +63,7 @@ type Player struct {
 
 func (p *Player) process() {
 	p.pending = make(map[[2]int32]time.Time)
-	p.chunkRequest = make(chan [2]int32, (radius*2+1)*(radius*2+1))
+	p.chunkRequest = make(chan [2]int32, (ChunkRadius*2+1)*(ChunkRadius*2+1))
 	resendTicker := time.NewTicker(time.Second * 3)
 	defer resendTicker.Stop()
 	go p.updateChunk()
@@ -77,8 +79,8 @@ func (p *Player) process() {
 		case <-p.updateTicker.C:
 			cx, cz := int32(p.Position.X)>>4, int32(p.Position.Z)>>4
 			chunkHold := make(map[[2]int32]struct{})
-			for ccx := cx - radius; ccx <= cx+radius; ccx++ {
-				for ccz := cz - radius; ccz <= cz+radius; ccz++ {
+			for ccx := cx - ChunkRadius; ccx <= cx+ChunkRadius; ccx++ {
+				for ccz := cz - ChunkRadius; ccz <= cz+ChunkRadius; ccz++ {
 					chunkHold[[2]int32{ccx, ccz}] = struct{}{}
 				}
 			}
@@ -102,11 +104,22 @@ func (p *Player) process() {
 			delete(p.pending, [2]int32{c.X, c.Z})
 			p.sendChunk(c)
 		case <-resendTicker.C:
-			for cx := int32(p.Position.X) - radius; cx <= int32(p.Position.X)+radius; cx++ {
-				for cz := int32(p.Position.Z) - radius; cz <= int32(p.Position.Z)+radius; cz++ {
+			for cx := int32(p.Position.X) - ChunkRadius; cx <= int32(p.Position.X)+ChunkRadius; cx++ {
+				for cz := int32(p.Position.Z) - ChunkRadius; cz <= int32(p.Position.Z)+ChunkRadius; cz++ {
 					p.requestChunk([2]int32{cx, cz})
 				}
 			}
+		}
+	}
+}
+
+// SendNearChunk sends chunks near the player in radius.
+// This function should be run on player process goroutine, or RunAs().
+func (p *Player) SendNearChunk() {
+	cx, cz := int32(p.Position.X)>>4, int32(p.Position.Z)>>4
+	for ccx := cx - ChunkRadius; ccx <= cx+ChunkRadius; ccx++ {
+		for ccz := cz - ChunkRadius; ccz <= cz+ChunkRadius; ccz++ {
+			p.requestChunk([2]int32{ccx, ccz})
 		}
 	}
 }
@@ -294,6 +307,9 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 			})
 		}
 		//spew.Dump(pk)
+	case *proto.ContainerSetSlot:
+		pk := pk.(*proto.ContainerSetSlot)
+		spew.Dump(pk)
 
 	case *proto.Animate:
 		pk := pk.(*proto.Animate)
@@ -410,7 +426,6 @@ func (p *Player) firstSpawn() {
 					RawUUID:  p.UUID,
 					EntityID: p.EntityID,
 					Username: p.Username,
-					SkinName: p.SkinName,
 					Skin:     p.Skin,
 				}},
 			})
@@ -424,13 +439,12 @@ func (p *Player) firstSpawn() {
 			RawUUID:  pl.UUID,
 			EntityID: pl.EntityID,
 			Username: pl.Username,
-			SkinName: pl.SkinName,
 			Skin:     pl.Skin,
 		})
 	})
 
-	for cx := int32(p.Position.X) - radius; cx <= int32(p.Position.X)+radius; cx++ {
-		for cz := int32(p.Position.Z) - radius; cz <= int32(p.Position.Z)+radius; cz++ {
+	for cx := int32(p.Position.X) - ChunkRadius; cx <= int32(p.Position.X)+ChunkRadius; cx++ {
+		for cz := int32(p.Position.Z) - ChunkRadius; cz <= int32(p.Position.Z)+ChunkRadius; cz++ {
 			p.requestChunk([2]int32{cx, cz})
 		}
 	}

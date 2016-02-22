@@ -1688,7 +1688,7 @@ func (i SetPlayerGametype) Write() *bytes.Buffer {
 type PlayerListEntry struct {
 	RawUUID            [16]byte
 	EntityID           uint64
-	Username, SkinName string
+	Username, Skinname string
 	Skin               []byte
 }
 
@@ -1720,7 +1720,7 @@ func (i *PlayerList) Read(buf *bytes.Buffer) {
 		}
 		entry.EntityID = buffer.ReadLong(buf)
 		entry.Username = buffer.ReadString(buf)
-		entry.SkinName = buffer.ReadString(buf)
+		entry.Skinname = buffer.ReadString(buf)
 		entry.Skin = []byte(buffer.ReadString(buf))
 		i.PlayerEntries[k] = entry
 	}
@@ -1738,8 +1738,9 @@ func (i PlayerList) Write() *bytes.Buffer {
 		}
 		buffer.WriteLong(buf, entry.EntityID)
 		buffer.WriteString(buf, entry.Username)
-		buffer.WriteString(buf, entry.SkinName)
-		buffer.WriteString(buf, string(entry.Skin))
+		buffer.WriteString(buf, entry.Skinname)
+		buffer.WriteShort(buf, uint16(len(entry.Skin)))
+		buffer.Write(buf, entry.Skin)
 	}
 	return buf
 }
