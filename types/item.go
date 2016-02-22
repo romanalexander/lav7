@@ -521,6 +521,7 @@ func (i Item) Write() []byte {
 	buffer.WriteByte(buf, i.Amount)
 	buffer.WriteShort(buf, i.Meta)
 	compound := new(bytes.Buffer)
+	i.Compound = new(nbt.Compound)
 	i.Compound.WriteTo(compound)
 	buffer.WriteLShort(buf, uint16(compound.Len()))
 	buf.Write(compound.Bytes())

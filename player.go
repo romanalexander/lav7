@@ -44,12 +44,11 @@ type Player struct {
 
 	fastChunks   map[[2]int32]*types.Chunk
 	chunkRequest chan [2]int32
-	chunkBusy    bool
 	chunkStop    chan struct{}
 	chunkNotify  chan types.ChunkDelivery
 	pending      map[[2]int32]time.Time
 
-	inventory PlayerInventory
+	inventory *PlayerInventory
 
 	recvChan     chan *bytes.Buffer
 	raknetChan   chan<- *raknet.EncapsulatedPacket
@@ -236,7 +235,8 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 		p.loggedIn = true
 
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
-		p.chunkBusy = true
+		p.inventory.Holder = p
+		p.inventory.Init()
 		p.firstSpawn()
 		go func() {
 			<-time.After(time.Second * 2)
@@ -498,7 +498,7 @@ func (p *Player) BroadcastOthers(pk proto.Packet) {
 func (p *Player) SendPacket(pk proto.Packet) {
 	buf := bytes.NewBuffer([]byte{0x8e, pk.Pid()})
 	buffer.Write(buf, pk.Write().Bytes())
-	p.send(buf)
+	p.Send(buf)
 }
 
 // SendDirect sends given packet without passing to raknetChan channel.
@@ -536,8 +536,9 @@ func (p *Player) RunAs(callback PlayerCallback) {
 	p.callbackChan <- callback
 }
 
+// Send sends bytes buffer to client.
 // Do not use this method for sending packet to client, this is an internal function.
-func (p *Player) send(buf *bytes.Buffer) {
+func (p *Player) Send(buf *bytes.Buffer) {
 	ep := new(raknet.EncapsulatedPacket)
 	ep.Reliability = 2
 	ep.Buffer = buf

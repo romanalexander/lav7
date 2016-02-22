@@ -1496,7 +1496,7 @@ const (
 // ContainerSetContent needs to be documented.
 type ContainerSetContent struct {
 	WindowID byte
-	Slots    []*types.Item
+	Slots    []types.Item
 	Hotbar   []uint32
 }
 
@@ -1507,13 +1507,13 @@ func (i ContainerSetContent) Pid() byte { return ContainerSetContentHead }
 func (i *ContainerSetContent) Read(buf *bytes.Buffer) {
 	i.WindowID = buffer.ReadByte(buf)
 	count := buffer.ReadShort(buf)
-	i.Slots = make([]*types.Item, count)
+	i.Slots = make([]types.Item, count)
 	for j := range i.Slots {
 		if buf.Len() < 7 {
 			break
 		}
-		i.Slots[j] = new(types.Item)
-		i.Slots[j].Read(buf)
+		i.Slots[j] = *new(types.Item)
+		(&i.Slots[j]).Read(buf)
 	}
 	if i.WindowID == InventoryWindow {
 		count := buffer.ReadShort(buf)

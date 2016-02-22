@@ -40,6 +40,8 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *bytes.Buffer) {
 	p.chunkRequest = make(chan [2]int32, 32)
 	p.chunkNotify = make(chan types.ChunkDelivery, 16)
 
+	p.inventory = new(PlayerInventory)
+
 	iteratorLock.Lock()
 	Players[identifier] = p
 	iteratorLock.Unlock()

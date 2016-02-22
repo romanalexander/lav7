@@ -306,11 +306,11 @@ func (s *Session) SendEncapsulated(ep *EncapsulatedPacket) {
 	}
 	if ep.TotalLen()+4 > int(s.mtuSize) { // Need split
 		s.splitID++
+		log.Println("Send split")
 		splitID := s.splitID
 		splitIndex := uint32(0)
 		for ep.Buffer.Len() > 0 {
-			readSize := int(s.mtuSize) - 34
-			buf := ep.Next(readSize)
+			buf := ep.Next(int(s.mtuSize) - 34)
 			sp := new(EncapsulatedPacket)
 			sp.SplitID = splitID
 			sp.HasSplit = true
