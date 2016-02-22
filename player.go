@@ -12,7 +12,6 @@ import (
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
-	"github.com/davecgh/go-spew/spew"
 )
 
 // ChunkRadius is a chunk radius that the player can handle.
@@ -242,12 +241,12 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 		p.Position = util.Vector3{X: 0, Y: 65, Z: 0}
 		p.loggedIn = true
 
-		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
 		p.inventory.Holder = p
 		p.inventory.Init()
+		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
 		p.firstSpawn()
 		go func() {
-			<-time.After(time.Second * 2)
+			<-time.After(time.Second * 1)
 
 			p.SendPacket(&proto.PlayStatus{
 				Status: proto.PlayerSpawn,
@@ -328,8 +327,8 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 		}
 		//spew.Dump(pk)
 	case *proto.ContainerSetSlot:
-		pk := pk.(*proto.ContainerSetSlot)
-		spew.Dump(pk)
+		//pk := pk.(*proto.ContainerSetSlot)
+		//spew.Dump(pk)
 
 	case *proto.Animate:
 		pk := pk.(*proto.Animate)

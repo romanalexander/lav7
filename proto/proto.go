@@ -1530,7 +1530,7 @@ func (i ContainerSetContent) Write() *bytes.Buffer {
 	buffer.WriteByte(buf, i.WindowID)
 	buffer.WriteShort(buf, uint16(len(i.Slots)))
 	for _, slot := range i.Slots {
-		buf.Write(slot.Write())
+		buffer.Write(buf, slot.Write())
 	}
 	if i.WindowID == InventoryWindow {
 		for _, h := range i.Hotbar {
