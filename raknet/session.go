@@ -24,7 +24,7 @@ const MaxPingTries uint64 = 2
 
 // RecoveryTimeout defines how long packets can live on recoery queue.
 // Once the packet is sent, the packet will be on recoery queue in RecoveryTimeout duration.
-const RecoveryTimeout = time.Second * 3
+const RecoveryTimeout = time.Second * 8
 
 // Sessions contains each raknet client sessions.
 var Sessions map[string]*Session
@@ -305,10 +305,10 @@ func (s *Session) SendEncapsulated(ep *EncapsulatedPacket) {
 		s.channelIndex[ep.OrderChannel]++
 	}
 	if ep.TotalLen()+4 > int(s.mtuSize) { // Need split
-		s.splitID++
-		log.Println("Send split")
 		splitID := s.splitID
+		s.splitID++
 		splitIndex := uint32(0)
+		toSend := ep.Buffer.Len()
 		for ep.Buffer.Len() > 0 {
 			buf := ep.Next(int(s.mtuSize) - 34)
 			sp := new(EncapsulatedPacket)
@@ -318,6 +318,7 @@ func (s *Session) SendEncapsulated(ep *EncapsulatedPacket) {
 			sp.Reliability = ep.Reliability
 			sp.SplitIndex = splitIndex
 			sp.Buffer = bytes.NewBuffer(buf)
+			toSend -= sp.Buffer.Len()
 			if splitIndex > 0 {
 				sp.MessageIndex = s.messageIndex
 				s.messageIndex++
@@ -330,6 +331,9 @@ func (s *Session) SendEncapsulated(ep *EncapsulatedPacket) {
 			}
 			splitIndex++
 			s.sendEncapsulatedDirect(sp)
+		}
+		if toSend != 0 {
+			log.Fatal("ERROR: toSend assert 0 failed:", toSend)
 		}
 	} else {
 		s.sendEncapsulatedDirect(ep)

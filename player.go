@@ -42,11 +42,12 @@ type Player struct {
 
 	playerShown map[uint64]struct{}
 
-	fastChunks   map[[2]int32]*types.Chunk
-	chunkRequest chan [2]int32
-	chunkStop    chan struct{}
-	chunkNotify  chan types.ChunkDelivery
-	pending      map[[2]int32]time.Time
+	fastChunks     map[[2]int32]*types.Chunk
+	fastChunkMutex util.Locker
+	chunkRequest   chan [2]int32
+	chunkStop      chan struct{}
+	chunkNotify    chan types.ChunkDelivery
+	pending        map[[2]int32]time.Time
 
 	inventory *PlayerInventory
 
@@ -83,6 +84,7 @@ func (p *Player) process() {
 					chunkHold[[2]int32{ccx, ccz}] = struct{}{}
 				}
 			}
+			p.fastChunkMutex.Lock()
 			for cc := range p.fastChunks {
 				if _, ok := chunkHold[cc]; ok {
 					delete(chunkHold, cc)
@@ -90,16 +92,20 @@ func (p *Player) process() {
 					delete(p.fastChunks, cc)
 				}
 			}
+			p.fastChunkMutex.Unlock()
 			for cc := range chunkHold {
 				if timeout, ok := p.pending[cc]; !ok || timeout.Before(time.Now()) {
 					p.requestChunk(cc)
 				}
 			}
 		case c := <-p.chunkNotify:
+			p.fastChunkMutex.Lock()
 			if _, ok := p.fastChunks[[2]int32{c.X, c.Z}]; ok {
+				p.fastChunkMutex.Unlock()
 				break
 			}
 			p.fastChunks[[2]int32{c.X, c.Z}] = c.Chunk
+			p.fastChunkMutex.Unlock()
 			delete(p.pending, [2]int32{c.X, c.Z})
 			p.sendChunk(c)
 			/*
@@ -164,6 +170,8 @@ func (p *Player) updateChunk() {
 
 // NOTE: Do NOT execute outside updateChunk goroutine. It could make data races.
 func (p *Player) getFastChunk(cx, cz int32) *types.Chunk {
+	p.fastChunkMutex.Lock()
+	defer p.fastChunkMutex.Unlock()
 	if c, ok := p.fastChunks[[2]int32{cx, cz}]; ok {
 		return c
 	}

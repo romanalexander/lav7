@@ -2,21 +2,23 @@ package lav7
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 
 	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/types"
-	"github.com/L7-MCPE/lav7/util"
 )
 
-var creativeInvCache []byte
+var creativeInvCache *bytes.Buffer
 
 func init() {
 	inv := make(Inventory, len(types.CreativeItems))
 	copy(inv, types.CreativeItems)
-	creativeInvCache = util.EncodeDeflate((&proto.ContainerSetContent{
+	creativeInvCache = (&proto.ContainerSetContent{
 		WindowID: proto.CreativeWindow,
 		Slots:    inv,
-	}).Write().Bytes())
+	}).Write()
+	fmt.Print(hex.Dump(creativeInvCache.Bytes()))
 }
 
 // Inventory is just a set of items, for containers or inventory holder entities.
@@ -37,6 +39,6 @@ func (pi *PlayerInventory) Init() {
 		inv := make(Inventory, len(types.CreativeItems))
 		copy(inv, types.CreativeItems)
 		pi.Inventory = &inv
-		pi.Holder.Send(bytes.NewBuffer(creativeInvCache))
+		pi.Holder.Send(bytes.NewBufferString(creativeInvCache.String()))
 	}
 }

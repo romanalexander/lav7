@@ -13,6 +13,7 @@ import (
 	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/types"
+	"github.com/L7-MCPE/lav7/util"
 )
 
 // RegisterPlayer registers player to the server and returns packet handler function for it.
@@ -36,6 +37,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *bytes.Buffer) {
 	p.updateTicker = time.NewTicker(time.Millisecond * 500)
 
 	p.fastChunks = make(map[[2]int32]*types.Chunk)
+	p.fastChunkMutex = util.NewMutex()
 	p.chunkStop = make(chan struct{}, 1)
 	p.chunkRequest = make(chan [2]int32, 32)
 	p.chunkNotify = make(chan types.ChunkDelivery, 16)
