@@ -30,12 +30,12 @@ type Vilan struct {
 	name string
 }
 
-// Init implemets format.Provider interface.
+// Init implements format.Provider interface.
 func (v *Vilan) Init(name string) {
 	v.name = name
 }
 
-// Loadable implemets format.Provider interface.
+// Loadable implements format.Provider interface.
 func (v *Vilan) Loadable(cx, cz int32) (path string, ok bool) {
 	sectionX, sectionZ := cx>>2, cz>>2
 	path = fmt.Sprintf("levels/%s/section.%d.%d.v", v.name, sectionX, sectionZ)
@@ -66,7 +66,7 @@ func (v *Vilan) Loadable(cx, cz int32) (path string, ok bool) {
 	return
 }
 
-// LoadChunk implemets format.Provider interface.
+// LoadChunk implements format.Provider interface.
 func (v *Vilan) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err error) {
 	sectionX, sectionZ := cx>>2, cz>>2
 	path = fmt.Sprintf("levels/%s/section.%d.%d.v", v.name, sectionX, sectionZ)
@@ -93,7 +93,7 @@ func (v *Vilan) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err er
 	return
 }
 
-// WriteChunk implemets format.Provider interface.
+// WriteChunk implements format.Provider interface.
 func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	sectionX, sectionZ := cx>>2, cz>>2
 	path := fmt.Sprintf("levels/%s/section.%d.%d.v", v.name, sectionX, sectionZ)
@@ -141,7 +141,7 @@ func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	return err
 }
 
-// SaveAll implemets format.Provider interface.
+// SaveAll implements format.Provider interface.
 func (v *Vilan) SaveAll(chunks map[[2]int32]*types.Chunk) error {
 	errstr := ""
 	for k, c := range chunks {

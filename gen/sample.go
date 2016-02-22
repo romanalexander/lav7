@@ -11,7 +11,7 @@ type SampleGenerator struct {
 	Cache *types.Chunk
 }
 
-// Init implemets gen.Generator interface.
+// Init implements gen.Generator interface.
 func (s *SampleGenerator) Init() {
 	chunk := new(types.Chunk)
 	for x := byte(0); x < 16; x++ {
@@ -27,7 +27,7 @@ func (s *SampleGenerator) Init() {
 	s.Cache = chunk
 }
 
-// Gen implemets gen.Generator interface.
+// Gen implements gen.Generator interface.
 func (s *SampleGenerator) Gen(x, z int32) *types.Chunk {
 	chunk := new(types.Chunk)
 	chunk.CopyFrom(s.Cache)

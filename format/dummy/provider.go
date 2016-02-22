@@ -28,12 +28,12 @@ type Dummy struct {
 	Name string
 }
 
-// Init implemets format.Provider interface.
+// Init implements format.Provider interface.
 func (dm *Dummy) Init(name string) {
 	dm.Name = name
 }
 
-// Loadable implemets format.Provider interface.
+// Loadable implements format.Provider interface.
 func (dm *Dummy) Loadable(cx, cz int32) (path string, ok bool) {
 	var err error
 	path, err = filepath.Abs("levels/" + dm.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw")
@@ -56,7 +56,7 @@ func (dm *Dummy) Loadable(cx, cz int32) (path string, ok bool) {
 	return
 }
 
-// LoadChunk implemets format.Provider interface.
+// LoadChunk implements format.Provider interface.
 func (dm *Dummy) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err error) {
 	var f *os.File
 	f, err = os.OpenFile(path, os.O_RDONLY, os.ModePerm)
@@ -82,7 +82,7 @@ func (dm *Dummy) LoadChunk(cx, cz int32, path string) (chunk *types.Chunk, err e
 
 }
 
-// WriteChunk implemets format.Provider interface.
+// WriteChunk implements format.Provider interface.
 func (dm *Dummy) WriteChunk(cx, cz int32, c *types.Chunk) error {
 	path, _ := filepath.Abs("levels/" + dm.Name + "/" + strconv.Itoa(int(cx)) + "_" + strconv.Itoa(int(cz)) + ".raw")
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -98,7 +98,7 @@ func (dm *Dummy) WriteChunk(cx, cz int32, c *types.Chunk) error {
 	return nil
 }
 
-// SaveAll implemets format.Provider interface.
+// SaveAll implements format.Provider interface.
 func (dm *Dummy) SaveAll(chunks map[[2]int32]*types.Chunk) error {
 	errstr := ""
 	for k, c := range chunks {
