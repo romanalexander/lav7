@@ -64,8 +64,8 @@ type Player struct {
 func (p *Player) process() {
 	p.pending = make(map[[2]int32]time.Time)
 	p.chunkRequest = make(chan [2]int32, (ChunkRadius*2+1)*(ChunkRadius*2+1))
-	resendTicker := time.NewTicker(time.Second * 3)
-	defer resendTicker.Stop()
+	// resendTicker := time.NewTicker(time.Second * 3)
+	// defer resendTicker.Stop()
 	go p.updateChunk()
 	for {
 		select {
@@ -103,12 +103,14 @@ func (p *Player) process() {
 			p.fastChunks[[2]int32{c.X, c.Z}] = c.Chunk
 			delete(p.pending, [2]int32{c.X, c.Z})
 			p.sendChunk(c)
-		case <-resendTicker.C:
-			for cx := int32(p.Position.X) - ChunkRadius; cx <= int32(p.Position.X)+ChunkRadius; cx++ {
-				for cz := int32(p.Position.Z) - ChunkRadius; cz <= int32(p.Position.Z)+ChunkRadius; cz++ {
-					p.requestChunk([2]int32{cx, cz})
-				}
-			}
+			/*
+				case <-resendTicker.C:
+					for cx := int32(p.Position.X) - ChunkRadius; cx <= int32(p.Position.X)+ChunkRadius; cx++ {
+						for cz := int32(p.Position.Z) - ChunkRadius; cz <= int32(p.Position.Z)+ChunkRadius; cz++ {
+							p.requestChunk([2]int32{cx, cz})
+						}
+					}
+			*/
 		}
 	}
 }
@@ -139,7 +141,7 @@ func (p *Player) updateChunk() {
 		case <-p.chunkStop:
 			return
 		case req := <-p.chunkRequest:
-			if c := p.Level.GetChunk(req[0], req[1]); c != nil {
+			if c := p.getFastChunk(req[0], req[1]); c != nil {
 				p.chunkNotify <- types.ChunkDelivery{
 					X:     req[0],
 					Z:     req[1],
@@ -159,6 +161,14 @@ func (p *Player) updateChunk() {
 			}
 		}
 	}
+}
+
+// NOTE: Do NOT execute outside updateChunk goroutine. It could make data races.
+func (p *Player) getFastChunk(cx, cz int32) *types.Chunk {
+	if c, ok := p.fastChunks[[2]int32{cx, cz}]; ok {
+		return c
+	}
+	return p.Level.GetChunk(cx, cz)
 }
 
 // HandlePacket handles received MCPE packet after raknet connection is established.

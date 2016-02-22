@@ -3,6 +3,7 @@ package lav7
 import (
 	"fmt"
 	"log"
+	"runtime"
 	"time"
 
 	"github.com/L7-MCPE/lav7/format"
@@ -12,14 +13,21 @@ import (
 
 const tickDuration = time.Millisecond * 50
 
+var numWorkers = runtime.NumCPU()
+
+type genRequest struct {
+	done   chan<- struct{}
+	cx, cz int32
+}
+
 // Level is a struct for processing MCPE worlds.
 type Level struct {
 	format.Provider
 	Name string
 
 	ChunkMap   map[[2]int32]*types.Chunk
-	TaskMap    map[[2]int32]struct{}
 	ChunkMutex util.Locker
+	genTask    chan genRequest
 	Gen        func(int32, int32) *types.Chunk
 
 	Ticker *time.Ticker
@@ -30,11 +38,15 @@ type Level struct {
 func (lv *Level) Init(pv format.Provider) {
 	lv.Provider = pv
 	lv.ChunkMap = make(map[[2]int32]*types.Chunk)
-	lv.TaskMap = make(map[[2]int32]struct{})
 	lv.ChunkMutex = util.NewMutex()
 	lv.Ticker = time.NewTicker(tickDuration)
 	lv.Stop = make(chan struct{}, 1)
+	lv.genTask = make(chan genRequest, 512)
 	pv.Init(lv.Name)
+	log.Printf("* level: generating %d workers for chunk gen", numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		go lv.genWorker()
+	}
 }
 
 // Process receives signals from two channels, Ticker.C and Stop.
@@ -52,6 +64,16 @@ func (lv *Level) Process() {
 
 func (lv *Level) tick() {
 
+}
+
+func (lv *Level) genWorker() {
+	for task := range lv.genTask {
+		c := lv.Gen(task.cx, task.cz)
+		lv.ChunkMutex.Lock()
+		lv.SetChunk(task.cx, task.cz, c)
+		lv.ChunkMutex.Unlock()
+		task.done <- struct{}{}
+	}
 }
 
 // OnUseItem handles UseItemPacket and determines position to update block position.
@@ -148,20 +170,13 @@ func (lv *Level) SetChunk(cx, cz int32, c *types.Chunk) {
 
 // CreateChunk generates chunk asynchronously.
 func (lv *Level) CreateChunk(cx, cz int32) <-chan struct{} {
-	lv.ChunkMutex.Lock()
-	if _, ok := lv.TaskMap[[2]int32{cx, cz}]; ok {
-		lv.ChunkMutex.Unlock()
-		return nil
-	}
-	lv.TaskMap[[2]int32{cx, cz}] = struct{}{}
-	lv.ChunkMutex.Unlock()
 	done := make(chan struct{}, 1)
 	go func(done chan<- struct{}) {
-		c := lv.Gen(cx, cz)
-		lv.ChunkMutex.Lock()
-		lv.SetChunk(cx, cz, c)
-		lv.ChunkMutex.Unlock()
-		done <- struct{}{}
+		lv.genTask <- genRequest{
+			cx:   cx,
+			cz:   cz,
+			done: done,
+		}
 	}(done)
 	return done
 }
