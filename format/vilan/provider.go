@@ -1,12 +1,10 @@
-/*
- Package vilan implements simple world format for lav7 servers.
-
- Vilan splits worlds into section files, containing 16(4*4) chunks.
- Filename format is 'section.sectionX.sectionZ.v'.
-
- Each sections' chunk structures are same as dummy format.
- There are no tile entity/NBT support for now.
-*/
+// Package vilan implements simple world format for lav7 servers.
+//
+// Vilan splits worlds into section files, containing 16(4*4) chunks.
+// Filename format is 'section.sectionX.sectionZ.v'.
+//
+// Each sections' chunk structures are same as dummy format.
+// There are no tile entity/NBT support for now.
 package vilan
 
 import (
@@ -19,6 +17,7 @@ import (
 	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util/buffer"
+	"github.com/L7-MCPE/lav7/util/try"
 )
 
 func init() {
@@ -53,14 +52,13 @@ func (v *Vilan) Loadable(cx, cz int32) (path string, ok bool) {
 	}
 	defer file.Close()
 
-	buf := make([]byte, 2)
-	_, err = file.Read(buf)
-	if err != nil {
+	var chunkstat uint16
+	if err := try.Safe(func() {
+		chunkstat = buffer.ReadShort(file)
+	}); err != nil {
 		log.Println("Error while reading chunk status byte:", err)
 		return "", false
 	}
-
-	chunkstat := uint16(buf[1])<<8 | uint16(buf[0])
 
 	ok = (chunkstat>>(byte(cx&3)<<2|byte(cz&3)))&1 == 1
 	return
@@ -113,8 +111,8 @@ func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	}
 
 	fbuf := make([]byte, 2)
-	if fstat.Size() < 2 {
-		file.Write(fbuf)
+	if fstat.Size() < 16*83200+2 {
+		file.WriteAt(make([]byte, 16*83200+2), 0)
 	} else if _, err := file.Read(fbuf); err != nil {
 		return err
 	}
@@ -134,9 +132,6 @@ func (v *Vilan) WriteChunk(cx, cz int32, chunk *types.Chunk) error {
 	buffer.BatchWrite(buf, chunk.BlockData[:], chunk.MetaData[:], chunk.LightData[:], chunk.SkyLightData[:], chunk.HeightMap[:], chunk.BiomeData[:])
 
 	pos := 2 + int64(byte(cx&3)<<2|byte(cz&3))*83200
-	if need := pos - fstat.Size(); need > 0 {
-		file.Write(make([]byte, need))
-	}
 	_, err = file.WriteAt(buf.Bytes(), pos)
 	return err
 }

@@ -536,3 +536,8 @@ func (i Item) Block() Block {
 		Meta: byte(i.Meta),
 	}
 }
+
+// IsBlock returns whether the item block-convertable.
+func (i Item) IsBlock() bool {
+	return i.ID < 256
+}

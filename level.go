@@ -81,13 +81,16 @@ func (lv *Level) genWorker() {
 //
 // Face direction:
 //
-// `0: Down  (Y-)
-// 1: Up    (Y+)
-// 2: North (Z-)
-// 3: South (Z+)
-// 4: West  (X-)
-// 5: East  (X+)`
+//     0: Down  (Y-)
+//     1: Up    (Y+)
+//     2: North (Z-)
+//     3: South (Z+)
+//     4: West  (X-)
+//     5: East  (X+)`
 func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (canceled bool) {
+	if !item.IsBlock() {
+		return
+	}
 	switch face {
 	case 0:
 		*y--

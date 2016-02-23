@@ -11,14 +11,14 @@ import (
 
 const (
 	// Version is a version of this server.
-	Version = "0.1.0 in-dev"
+	Version = "1.0.0 alpha"
 	// ServerName contains human readable server name
 	ServerName = "Lav7 - lightweight MCPE server"
 	// MaxPlayers is count of maximum available players
 	MaxPlayers = 20
 )
 
-// GitVersion is a git commit hash for this project.
+// GitCommit is a git commit hash for this project.
 // You should set this with -ldflags "-X github.com/L7-MCPE/lav7.GitVersion="
 var GitCommit = "unknown"
 
@@ -30,7 +30,7 @@ var Players = make(map[string]*Player)
 
 var iteratorLock = new(sync.Mutex)
 
-var LastEntityID uint64
+var lastEntityID uint64
 
 var levels = map[string]*Level{
 	defaultLvl: {Name: "dummy"},
@@ -40,6 +40,7 @@ var levelProviders = map[string]format.Provider{}
 
 var defaultLvl = "default"
 
+// RegisterProvider adds level format provider for server.
 func RegisterProvider(provider format.Provider) {
 	typname := reflect.TypeOf(provider)
 	typsl := strings.Split(typname.String(), ".")
@@ -49,6 +50,8 @@ func RegisterProvider(provider format.Provider) {
 	}
 }
 
+// GetProvider finds the provider with given name.
+// If it doesn't present, returns nill.
 func GetProvider(name string) format.Provider {
 	if pv, ok := levelProviders[name]; ok {
 		return pv

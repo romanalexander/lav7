@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/L7-MCPE/lav7/proto"
@@ -22,6 +23,11 @@ const ChunkRadius int32 = 5
 type PlayerCallback struct {
 	Call func(*Player, interface{})
 	Arg  interface{}
+}
+
+type chunkRequest struct {
+	x, z int32
+	wg   *sync.WaitGroup
 }
 
 // Player is a struct for handling/containing MCPE client specific things.
@@ -43,7 +49,7 @@ type Player struct {
 
 	fastChunks     map[[2]int32]*types.Chunk
 	fastChunkMutex util.Locker
-	chunkRequest   chan [2]int32
+	chunkRequest   chan chunkRequest
 	chunkStop      chan struct{}
 	chunkNotify    chan types.ChunkDelivery
 	pending        map[[2]int32]time.Time
@@ -62,7 +68,6 @@ type Player struct {
 
 func (p *Player) process() {
 	p.pending = make(map[[2]int32]time.Time)
-	p.chunkRequest = make(chan [2]int32, (ChunkRadius*2+1)*(ChunkRadius*2+1))
 	// resendTicker := time.NewTicker(time.Second * 3)
 	// defer resendTicker.Stop()
 	go p.updateChunk()
@@ -94,7 +99,7 @@ func (p *Player) process() {
 			p.fastChunkMutex.Unlock()
 			for cc := range chunkHold {
 				if timeout, ok := p.pending[cc]; !ok || timeout.Before(time.Now()) {
-					p.requestChunk(cc)
+					p.requestChunk(cc, nil)
 				}
 			}
 		case c := <-p.chunkNotify:
@@ -120,20 +125,27 @@ func (p *Player) process() {
 }
 
 // SendNearChunk sends chunks near the player in radius.
-// This function should be run on player process goroutine, or RunAs().
-func (p *Player) SendNearChunk() {
+// This function should be run only on p.process goroutine, or RunAs().
+func (p *Player) SendNearChunk(wg *sync.WaitGroup) {
 	cx, cz := int32(p.Position.X)>>4, int32(p.Position.Z)>>4
+	if wg != nil {
+		wg.Add(int(ChunkRadius*2+1) * int(ChunkRadius*2+1))
+	}
 	for ccx := cx - ChunkRadius; ccx <= cx+ChunkRadius; ccx++ {
 		for ccz := cz - ChunkRadius; ccz <= cz+ChunkRadius; ccz++ {
-			p.requestChunk([2]int32{ccx, ccz})
+			p.requestChunk([2]int32{ccx, ccz}, wg)
 		}
 	}
 }
 
-// NOTE: Do NOT execute outside player process goroutine.
-func (p *Player) requestChunk(cc [2]int32) {
+// NOTE: Do NOT execute outside player process goroutine. pending map could be racy.
+func (p *Player) requestChunk(cc [2]int32, wg *sync.WaitGroup) {
 	go func(cc [2]int32) {
-		p.chunkRequest <- cc
+		p.chunkRequest <- chunkRequest{
+			x:  cc[0],
+			z:  cc[1],
+			wg: wg,
+		}
 	}(cc)
 	p.pending[cc] = time.Now().Add(time.Second * 5)
 }
@@ -145,23 +157,29 @@ func (p *Player) updateChunk() {
 		case <-p.chunkStop:
 			return
 		case req := <-p.chunkRequest:
-			if c := p.getFastChunk(req[0], req[1]); c != nil {
+			if c := p.getFastChunk(req.x, req.z); c != nil {
 				p.chunkNotify <- types.ChunkDelivery{
-					X:     req[0],
-					Z:     req[1],
+					X:     req.x,
+					Z:     req.z,
 					Chunk: c,
+				}
+				if req.wg != nil {
+					req.wg.Done()
 				}
 				continue
 			}
-			if ch := p.Level.CreateChunk(req[0], req[1]); ch != nil {
-				go func(cx, cz int32, done <-chan struct{}) {
+			if ch := p.Level.CreateChunk(req.x, req.z); ch != nil {
+				go func(cx, cz int32, wg *sync.WaitGroup, done <-chan struct{}) {
 					<-done
 					p.chunkNotify <- types.ChunkDelivery{
 						X:     cx,
 						Z:     cz,
 						Chunk: p.Level.GetChunk(cx, cz),
 					}
-				}(req[0], req[1], ch)
+					if wg != nil {
+						wg.Done()
+					}
+				}(req.x, req.z, req.wg, ch)
 			}
 		}
 	}
@@ -224,6 +242,7 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 		p.Secret = pk.ClientSecret
 		p.SkinName = pk.SkinName
 		p.Skin = pk.Skin
+		p.Position = util.Vector3{X: 0, Y: 8, Z: 0}
 
 		p.SendPacket(&proto.StartGame{
 			Seed:      0xffffffff, // -1
@@ -232,33 +251,18 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 			Gamemode:  1, // 0: Survival, 1: Creative
 			EntityID:  0, // Player eid set to 0
 			SpawnX:    0,
-			SpawnY:    65,
+			SpawnY:    8,
 			SpawnZ:    0,
 			X:         0,
-			Y:         65,
+			Y:         8,
 			Z:         0,
 		})
-		p.Position = util.Vector3{X: 0, Y: 65, Z: 0}
 		p.loggedIn = true
 
 		p.inventory.Holder = p
 		p.inventory.Init()
 		// TODO: Send SetTime/SpawnPosition/Health/Difficulty packets
 		p.firstSpawn()
-		go func() {
-			<-time.After(time.Second * 1)
-
-			p.SendPacket(&proto.PlayStatus{
-				Status: proto.PlayerSpawn,
-			})
-
-			SpawnPlayer(p)
-			p.spawned = true
-
-			Message(p.Username + " joined")
-			log.Println(p.Username + " joined the game")
-			p.SendMessage("Hello, this is lav7 test server!")
-		}()
 
 	case *proto.Batch:
 		pk := pk.(*proto.Batch)
@@ -462,11 +466,26 @@ func (p *Player) firstSpawn() {
 		})
 	})
 
-	for cx := int32(p.Position.X) - ChunkRadius; cx <= int32(p.Position.X)+ChunkRadius; cx++ {
-		for cz := int32(p.Position.Z) - ChunkRadius; cz <= int32(p.Position.Z)+ChunkRadius; cz++ {
-			p.requestChunk([2]int32{cx, cz})
-		}
-	}
+	wg := new(sync.WaitGroup)
+	p.SendNearChunk(wg)
+
+	go func() {
+		wg.Wait()
+
+		p.SendPacket(&proto.PlayStatus{
+			Status: proto.PlayerSpawn,
+		})
+
+		SpawnPlayer(p)
+		p.RunAs(PlayerCallback{
+			Call: func(pl *Player, arg interface{}) {
+				p.spawned = true
+				Message(p.Username + " joined")
+				log.Println(p.Username + " joined the game")
+				p.SendMessage("Hello, this is lav7 test server!")
+			},
+		})
+	}()
 
 	p.SendPacket(&proto.PlayerList{
 		Type:          proto.PlayerListAdd,

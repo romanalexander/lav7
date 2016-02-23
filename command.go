@@ -1,5 +1,4 @@
-// Package command is a handler for user command input from stdin or in-game.
-package command
+package lav7
 
 import (
 	"bufio"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/types"
@@ -29,11 +27,11 @@ func HandleCommand() {
 		texts := strings.Split(strings.Replace(text[:len(text)-1], "\r", "", -1), " ")
 		switch texts[0] {
 		case "stop", "exit":
-			go lav7.Stop(strings.Join(texts[1:], " "))
+			go Stop(strings.Join(texts[1:], " "))
 		case "spawn":
 			b, _ := base64.StdEncoding.DecodeString(skin)
 			b, _ = util.DecodeDeflate(b)
-			lav7.BroadcastPacket(&proto.PlayerList{
+			BroadcastPacket(&proto.PlayerList{
 				Type: proto.PlayerListAdd,
 				PlayerEntries: []proto.PlayerListEntry{
 					{
@@ -45,7 +43,7 @@ func HandleCommand() {
 					},
 				},
 			})
-			lav7.SpawnPlayer(&lav7.Player{
+			SpawnPlayer(&Player{
 				UUID:     [16]byte{0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6},
 				Username: "Test",
 				EntityID: 99,
@@ -53,7 +51,7 @@ func HandleCommand() {
 			})
 
 		case "move":
-			lav7.BroadcastPacket(&proto.MovePlayer{
+			BroadcastPacket(&proto.MovePlayer{
 				EntityID: 199,
 				X:        1,
 				Y:        64,
@@ -69,7 +67,7 @@ func HandleCommand() {
 					Block: types.Block{ID: 4},
 				}
 			}
-			lav7.BroadcastPacket(&proto.UpdateBlock{
+			BroadcastPacket(&proto.UpdateBlock{
 				BlockRecords: br,
 			})
 		case "trace":
@@ -86,14 +84,14 @@ func HandleCommand() {
 			debug.WriteHeapDump(f.Fd())
 			log.Printf("Done")
 		case "unloadall":
-			lv := lav7.GetDefaultLevel()
+			lv := GetDefaultLevel()
 			lv.ChunkMutex.Lock()
 			lv.ChunkMap = make(map[[2]int32]*types.Chunk)
 			lv.ChunkMutex.Unlock()
 		case "sendchunk":
-			lav7.BroadcastCallback(lav7.PlayerCallback{
-				Call: func(p *lav7.Player, args interface{}) {
-					p.SendNearChunk()
+			BroadcastCallback(PlayerCallback{
+				Call: func(p *Player, args interface{}) {
+					p.SendNearChunk(nil)
 				},
 			})
 		default:

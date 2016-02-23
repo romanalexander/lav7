@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/L7-MCPE/lav7"
-	"github.com/L7-MCPE/lav7/command"
 	_ "github.com/L7-MCPE/lav7/format/dummy"
 	_ "github.com/L7-MCPE/lav7/format/vilan"
 	"github.com/L7-MCPE/lav7/gen"
@@ -68,7 +67,7 @@ func main() {
 
 	log.Println("All done! Elapsed time:", time.Since(start).Seconds(), "seconds")
 	log.Println("Server is ready. Type 'stop' to stop server.")
-	command.HandleCommand()
+	lav7.HandleCommand()
 }
 
 func initLevel(genRadius int32, img string, format string) {
@@ -100,7 +99,7 @@ func initLevel(genRadius int32, img string, format string) {
 			Height: int32(cfg.Height),
 		}
 	} else {
-		g = new(gen.SampleGenerator)
+		g = new(gen.FlatGenerator)
 	}
 	log.Println("Generator type:", reflect.TypeOf(g))
 	g.Init()

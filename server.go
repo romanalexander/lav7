@@ -27,7 +27,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *bytes.Buffer) {
 	p := new(Player)
 	p.Address = addr
 	p.Level = GetDefaultLevel()
-	p.EntityID = atomic.AddUint64(&LastEntityID, 1)
+	p.EntityID = atomic.AddUint64(&lastEntityID, 1)
 	p.playerShown = make(map[uint64]struct{})
 
 	ch := make(chan *bytes.Buffer, 64)
@@ -39,7 +39,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *bytes.Buffer) {
 	p.fastChunks = make(map[[2]int32]*types.Chunk)
 	p.fastChunkMutex = util.NewMutex()
 	p.chunkStop = make(chan struct{}, 1)
-	p.chunkRequest = make(chan [2]int32, 32)
+	p.chunkRequest = make(chan chunkRequest, (ChunkRadius * ChunkRadius * 2))
 	p.chunkNotify = make(chan types.ChunkDelivery, 16)
 
 	p.inventory = new(PlayerInventory)
