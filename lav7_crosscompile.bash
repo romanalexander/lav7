@@ -24,7 +24,7 @@ function lav7-crosscompile {
     local ACMD=""
 
     if [ "$GOOS" = "windows" ]; then
-        ACMD="${CMD} build -o lav7.exe -ldflags '-X \"github.com/L7-MCPE/lav7.GitCommit=$(git rev-parse --verify HEAD)\" -X \"github.com/L7-MCPE/lav7.BuildTime=$(LC_ALL=en_US.utf8 date -u)\"' l7start/lav7.go"
+        ACMD="${CMD} build -o lav7.exe -ldflags '-X \"github.com/L7-MCPE/lav7.GitCommit=$(git rev-parse --verify HEAD)\" -X \"github.com/L7-MCPE/lav7.BuildTime=$(LC_ALL=en_US.utf8 date)\"' l7start/lav7.go"
         echo $ACMD
         eval $ACMD || return 1
         mv lav7.exe ~/builds/${GOOS}/${GOARCH}
@@ -32,7 +32,7 @@ function lav7-crosscompile {
     elif [ "$CMD" = "go-linux-arm" ]; then
         for ARM in $ARMS; do
             mkdir -p ~/builds/${GOOS}/${GOARCH}/ARMv${ARM}
-            ACMD="GOARM=${ARM} $CMD build -o lav7 -ldflags '-X \"github.com/L7-MCPE/lav7.GitCommit=$(git rev-parse --verify HEAD)\" -X \"github.com/L7-MCPE/lav7.BuildTime=$(LC_ALL=en_US.utf8 date -u)\"' l7start/lav7.go"
+            ACMD="GOARM=${ARM} $CMD build -o lav7 -ldflags '-X \"github.com/L7-MCPE/lav7.GitCommit=$(git rev-parse --verify HEAD)\" -X \"github.com/L7-MCPE/lav7.BuildTime=$(LC_ALL=en_US.utf8 date)\"' l7start/lav7.go"
             echo $ACMD
             eval $ACMD || return 1
             mv lav7 ~/builds/${GOOS}/${GOARCH}/ARMv${ARM}
@@ -41,14 +41,14 @@ function lav7-crosscompile {
     elif [ "$CMD" = "go-android-arm" ]; then
         for ARM in $ARMS; do
             mkdir -p ~/builds/${GOOS}/${GOARCH}/ARMv${ARM}
-            ACMD="CC_FOR_TARGET=$NDK_CC GOARM=${ARM} $CMD build -o lav7 -ldflags '-X \"github.com/L7-MCPE/lav7.GitCommit=$(git rev-parse --verify HEAD)\" -X \"github.com/L7-MCPE/lav7.BuildTime=$(LC_ALL=en_US.utf8 date -u)\"' l7start/lav7.go"
+            ACMD="CC_FOR_TARGET=$NDK_CC GOARM=${ARM} $CMD build -o lav7 -ldflags '-X \"github.com/L7-MCPE/lav7.GitCommit=$(git rev-parse --verify HEAD)\" -X \"github.com/L7-MCPE/lav7.BuildTime=$(LC_ALL=en_US.utf8 date)\"' l7start/lav7.go"
             echo $ACMD
             eval $ACMD || return 1
             mv lav7 ~/builds/${GOOS}/${GOARCH}/ARMv${ARM}
             rm -Rf $ARM
         done
     else
-        ACMD="${CMD} build -o lav7 -ldflags '-X \"github.com/L7-MCPE/lav7.GitCommit=$(git rev-parse --verify HEAD)\" -X \"github.com/L7-MCPE/lav7.BuildTime=$(LC_ALL=en_US.utf8 date -u)\"' l7start/lav7.go"
+        ACMD="${CMD} build -o lav7 -ldflags '-X \"github.com/L7-MCPE/lav7.GitCommit=$(git rev-parse --verify HEAD)\" -X \"github.com/L7-MCPE/lav7.BuildTime=$(LC_ALL=en_US.utf8 date)\"' l7start/lav7.go"
         echo $ACMD
         eval $ACMD || return 1
         mv lav7 ~/builds/${GOOS}/${GOARCH}
@@ -69,7 +69,7 @@ function lav7-build-all {
 
 function lav7-build-publish {
     mkdir -p ~/share/lav7/builds
-    local BDATE=$(LC_ALL=en_US.utf-8 date -u +%Y-%m-%d)
+    local BDATE=$(LC_ALL=en_US.utf-8 date +%Y-%m-%d)
     eval "lav7-build-all"
     echo "Generating sha256sum..."
     for i in $(find . -type f -print); do sha256sum "$i"; done > SHA256SUM
