@@ -28,52 +28,57 @@ func (eg *ExperimentalGenerator) Gen(cx, cz int32) *types.Chunk {
 	defer chunk.Mutex().Unlock()
 
 	rcx, rcz := cx<<4, cz<<4
+	var stage [18][18]float64
+	for x := -1; x < 17; x++ {
+		n1 := noise1dx(float64(rcx) + float64(x) - 20)
+		n2 := noise1d(float64(rcx) + float64(x) + 20)
+		for z := -1; z < 17; z++ {
+			h1 := noise1d(n1 + float64(rcz) + float64(z))
+			h2 := noise1dx(n2 - float64(rcz) - float64(z))
+			h3 := noise1d(-float64(x) - float64(rcx) + float64(z) + float64(rcz))
+			h4 := noise1dx(-float64(z) - float64(rcz) + float64(x) + float64(rcx))
+
+			stage[x+1][z+1] = ((h1 + h2 + h3 + h4) / 4) + 20
+		}
+	}
 	for x := byte(0); x < 16; x++ {
-		nx := noise1dx(int(rcx) + int(x) - 20)
-		ny := noise1d(int(rcx) + int(x) + 20)
 		for z := byte(0); z < 16; z++ {
-			h1 := byte(noise1d(nx + int(rcz) + int(z)))
-			//log.Println(hh)
-			if h1 >= 128 {
-				h1 -= 128
-			}
-
-			h2 := byte(noise1d(ny + int(rcz) + int(z)))
-			//log.Println(hh)
-			if h2 >= 128 {
-				h2 -= 128
-			}
-
-			hh := (h1 + h2) / 2
+			hh := byte((stage[x+1][z+1]*.4+
+				stage[x+1][z]*.32+
+				stage[x+1][z+2]*.32+
+				stage[x+2][z]*.15+
+				stage[x+2][z+1]*.32+
+				stage[x][z+2]*.15+
+				stage[x][z]*.15+
+				stage[x][z+1]*.32+
+				stage[x][z+2]*.15)/1.64) & 0x7f
 			for y := byte(0); y < hh; y++ {
 				chunk.SetBlock(x, y, z, byte(types.Dirt))
 			}
 			chunk.SetBlock(x, hh, z, byte(types.Grass))
-			chunk.SetBiomeColor(x, z, 0, 200, 0)
+			chunk.SetHeightMap(x, z, hh)
+			chunk.SetBiomeColor(x, z, 0, 160, 0)
 		}
 	}
-	chunk.PopulateHeight()
 	return chunk
 }
 
-func noise1d(n int) int {
+func noise1d(n float64) float64 {
 	n += 35
 	h := float64(0)
-	for j := .25; j < 20; j *= 1.8 {
-		h += wave(float64(n)+j, 0.02*j, 12/j, 6)
+	for j := .25; j < 3.6; j *= 1.8 {
+		h += wave(float64(n)+j, 0.02*j, 11.8/j, 0)
 	}
-	h = math.Abs(h)
-	return int(h)
+	return h
 }
 
-func noise1dx(n int) int {
+func noise1dx(n float64) float64 {
 	n -= 25
 	h := float64(0)
-	for j := .20; j < 20; j *= 1.5 {
-		h += wave(float64(n)+j, 0.015*j, 15/j, 5)
+	for j := .20; j < 3.6; j *= 1.5 {
+		h += wave(float64(n)+j, 0.015*j, 13.2/j, 0)
 	}
-	h = math.Abs(h)
-	return int(h)
+	return h
 }
 
 func wave(n, multx, multy, add float64) float64 {
