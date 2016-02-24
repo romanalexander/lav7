@@ -301,34 +301,7 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 	case *proto.UseItem:
 		pk := pk.(*proto.UseItem)
 		px, py, pz := int32(pk.X), int32(pk.Y), int32(pk.Z)
-		if !p.Level.OnUseItem(&px, &py, &pz, pk.Face, pk.Item) {
-			p.BroadcastOthers(&proto.UpdateBlock{
-				BlockRecords: []proto.BlockRecord{
-					{
-						X: uint32(px),
-						Y: byte(py),
-						Z: uint32(pz),
-						Block: types.Block{
-							ID:   byte(pk.Item.ID),
-							Meta: byte(pk.Item.Meta),
-						},
-						Flags: proto.UpdateAllPriority,
-					},
-				},
-			})
-		} else {
-			p.SendPacket(&proto.UpdateBlock{
-				BlockRecords: []proto.BlockRecord{
-					{
-						X:     uint32(px),
-						Y:     byte(py),
-						Z:     uint32(pz),
-						Block: types.Block{},
-						Flags: proto.UpdateAllPriority,
-					},
-				},
-			})
-		}
+		p.Level.OnUseItem(p, px, py, pz, pk.Face, pk.Item)
 		//spew.Dump(pk)
 	case *proto.ContainerSetSlot:
 		//pk := pk.(*proto.ContainerSetSlot)

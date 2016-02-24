@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/L7-MCPE/lav7/format"
+	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 )
@@ -92,36 +93,59 @@ func (lv *Level) genWorker() {
 //     3: South (Z+)
 //     4: West  (X-)
 //     5: East  (X+)`
-func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (canceled bool) {
+func (lv *Level) OnUseItem(p *Player, x, y, z int32, face byte, item *types.Item) {
 	if !item.IsBlock() {
 		return
 	}
 	switch face {
 	case 0:
-		*y--
+		y--
 	case 1:
-		*y++
+		y++
 	case 2:
-		*z--
+		z--
 	case 3:
-		*z++
+		z++
 	case 4:
-		*x--
+		x--
 	case 5:
-		*x++
+		x++
 	case 255:
 		return
 	}
-	if *y > 127 {
+	if y > 127 {
 		return
 	}
-	if f := lv.GetBlock(*x, *y, *z); f == 0 {
-		lv.Set(*x, *y, *z, item.Block())
+	if f := lv.GetBlock(x, y, z); f == 0 {
+		lv.Set(x, y, z, item.Block())
+		p.BroadcastOthers(&proto.UpdateBlock{
+			BlockRecords: []proto.BlockRecord{
+				{
+					X: uint32(x),
+					Y: byte(y),
+					Z: uint32(z),
+					Block: types.Block{
+						ID:   byte(item.ID),
+						Meta: byte(item.Meta),
+					},
+					Flags: proto.UpdateAllPriority,
+				},
+			},
+		})
 	} else {
-		log.Printf("Block %d(%s) already exists on x:%d, y:%d, z: %d; cancelling. (face %d)", f, types.ID(f), *x, *y, *z, face)
-		canceled = true
+		p.SendMessage(fmt.Sprintf("Block %d(%s) already exists on x:%d, y:%d, z: %d", f, types.ID(f), x, y, z))
+		p.SendPacket(&proto.UpdateBlock{
+			BlockRecords: []proto.BlockRecord{
+				{
+					X:     uint32(x),
+					Y:     byte(y),
+					Z:     uint32(z),
+					Block: lv.Get(x, y, z),
+					Flags: proto.UpdateAllPriority,
+				},
+			},
+		})
 	}
-	return
 }
 
 // ChunkExists returns if the chunk is loaded on the given chunk coordinates.
