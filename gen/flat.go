@@ -2,6 +2,10 @@ package gen
 
 import "github.com/L7-MCPE/lav7/types"
 
+func init() {
+	RegisterGenerator(new(FlatGenerator))
+}
+
 // FlatGenerator generates flat MCPE chunks.
 type FlatGenerator struct {
 	Cache *types.Chunk

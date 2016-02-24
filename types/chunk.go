@@ -143,7 +143,7 @@ func (c *Chunk) SetBiomeColor(x, z, r, g, b byte) {
 func (c *Chunk) PopulateHeight() {
 	for x := byte(0); x < 16; x++ {
 		for z := byte(0); z < 16; z++ {
-			for y := byte(127); y >= 0; y-- {
+			for y := byte(127); y > 0; y-- {
 				if c.GetBlock(x, y, z) != 0 {
 					c.SetHeightMap(x, z, y)
 					break

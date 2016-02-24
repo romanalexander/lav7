@@ -6,6 +6,10 @@ import (
 	"github.com/L7-MCPE/lav7/types"
 )
 
+func init() {
+	RegisterGenerator(new(SampleGenerator))
+}
+
 // SampleGenerator is a simple generator concept.
 type SampleGenerator struct {
 	Cache *types.Chunk

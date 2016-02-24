@@ -70,6 +70,11 @@ func (lv *Level) genWorker() {
 	for task := range lv.genTask {
 		c := lv.Gen(task.cx, task.cz)
 		lv.ChunkMutex.Lock()
+		if _, ok := lv.ChunkMap[[2]int32{task.cx, task.cz}]; ok {
+			lv.ChunkMutex.Unlock()
+			task.done <- struct{}{}
+			continue
+		}
 		lv.SetChunk(task.cx, task.cz, c)
 		lv.ChunkMutex.Unlock()
 		task.done <- struct{}{}

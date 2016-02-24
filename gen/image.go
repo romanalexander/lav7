@@ -6,6 +6,10 @@ import (
 	"github.com/L7-MCPE/lav7/types"
 )
 
+func init() {
+	RegisterGenerator(new(ImageGenerator))
+}
+
 // ImageGenerator sets biome color to given image fixels.
 type ImageGenerator struct {
 	Cache         *types.Chunk

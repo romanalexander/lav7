@@ -242,7 +242,7 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 		p.Secret = pk.ClientSecret
 		p.SkinName = pk.SkinName
 		p.Skin = pk.Skin
-		p.Position = util.Vector3{X: 0, Y: 8, Z: 0}
+		p.Position = util.Vector3{X: 0, Y: 128, Z: 0}
 
 		p.SendPacket(&proto.StartGame{
 			Seed:      0xffffffff, // -1
@@ -251,10 +251,10 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 			Gamemode:  1, // 0: Survival, 1: Creative
 			EntityID:  0, // Player eid set to 0
 			SpawnX:    0,
-			SpawnY:    8,
+			SpawnY:    128,
 			SpawnZ:    0,
 			X:         0,
-			Y:         8,
+			Y:         128,
 			Z:         0,
 		})
 		p.loggedIn = true

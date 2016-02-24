@@ -14,6 +14,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ func main() {
 	mutex := flag.Bool("mutex", false, "trace mutexes for debugging")
 	port := flag.Uint64("port", 19132, "sets server port to given value")
 	img := flag.String("img", "none", "use experimental image chunk creator with given image")
+	genname := flag.String("gen", "flat", "uses given level generator")
 	format := flag.String("fmt", "vilan", "set level format explicitly")
 	flag.Parse()
 
@@ -60,7 +62,7 @@ func main() {
 	} else {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
-	initLevel(5, *img, *format)
+	initLevel(5, *genname, *img, *format)
 	initRaknet()
 	startLevel()
 	startRouter(uint16(*port))
@@ -70,28 +72,28 @@ func main() {
 	lav7.HandleCommand()
 }
 
-func initLevel(genRadius int32, img string, format string) {
+func initLevel(genRadius int32, genname string, img string, format string) {
 	var g gen.Generator
 	if img != "none" {
 		log.Print("* Using EXPERIMENTAL image chunk generator")
 		file, err := os.Open(img)
 		if err != nil {
-			log.Fatal("Error while opening image:", err)
+			log.Fatalln("Error while opening image:", err)
 		}
 		buf := new(bytes.Buffer)
 		io.Copy(buf, file)
 		bs := buf.Bytes()
 		cfg, format, err := image.DecodeConfig(buf)
 		if err != nil {
-			log.Fatal("Error while decoding image:", err)
+			log.Fatalln("Error while decoding image:", err)
 		}
 		log.Printf("* Image size: %d * %d, format detected: %s", cfg.Width, cfg.Height, format)
 		if cfg.Width < 16 || cfg.Height < 16 {
-			log.Fatal("Fatal: Image size should be bigger than 16*16.")
+			log.Fatalln("Fatal: Image size should be bigger than 16*16.")
 		}
 		img, _, err := image.Decode(bytes.NewBuffer(bs))
 		if err != nil {
-			log.Fatal("Error while loading image:", err)
+			log.Fatalln("Error while loading image:", err)
 		}
 		g = &gen.ImageGenerator{
 			Image:  img,
@@ -99,7 +101,10 @@ func initLevel(genRadius int32, img string, format string) {
 			Height: int32(cfg.Height),
 		}
 	} else {
-		g = new(gen.FlatGenerator)
+		g = gen.GetGenerator(strings.ToLower(genname))
+		if g == nil {
+			log.Fatalln("Fatal: cannot find given generator name:", genname)
+		}
 	}
 	log.Println("Generator type:", reflect.TypeOf(g))
 	g.Init()
@@ -107,7 +112,7 @@ func initLevel(genRadius int32, img string, format string) {
 	log.Println("Level format type:", format)
 	p := lav7.GetProvider(format)
 	if p == nil {
-		log.Fatal("Error: cannot find the format provider from server.")
+		log.Fatalln("Error: cannot find the format provider from server.")
 	}
 	p.Init(lav7.GetDefaultLevel().Name)
 	lav7.GetDefaultLevel().Init(p)
@@ -147,7 +152,7 @@ func startRouter(port uint16) {
 	var r *raknet.Router
 	var err error
 	if r, err = raknet.CreateRouter(lav7.RegisterPlayer, lav7.UnregisterPlayer, port); err != nil {
-		log.Fatal("Error while creating router:", err)
+		log.Fatalln("Error while creating router:", err)
 	}
 	r.Start()
 }

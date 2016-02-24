@@ -333,7 +333,7 @@ func (s *Session) SendEncapsulated(ep *EncapsulatedPacket) {
 			s.sendEncapsulatedDirect(sp)
 		}
 		if toSend != 0 {
-			log.Fatal("ERROR: toSend assert 0 failed:", toSend)
+			log.Fatalln("ERROR: toSend assert 0 failed:", toSend)
 		}
 	} else {
 		s.sendEncapsulatedDirect(ep)

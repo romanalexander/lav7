@@ -51,7 +51,7 @@ func RegisterProvider(provider format.Provider) {
 }
 
 // GetProvider finds the provider with given name.
-// If it doesn't present, returns nill.
+// If it doesn't present, returns nil.
 func GetProvider(name string) format.Provider {
 	if pv, ok := levelProviders[name]; ok {
 		return pv
