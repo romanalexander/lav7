@@ -320,9 +320,9 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 			p.SendPacket(&proto.UpdateBlock{
 				BlockRecords: []proto.BlockRecord{
 					{
-						X:     uint32(pk.X),
-						Y:     byte(pk.Y),
-						Z:     uint32(pk.Z),
+						X:     uint32(px),
+						Y:     byte(py),
+						Z:     uint32(pz),
 						Block: types.Block{},
 						Flags: proto.UpdateAllPriority,
 					},
