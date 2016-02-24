@@ -93,7 +93,7 @@ func (lv *Level) genWorker() {
 //     4: West  (X-)
 //     5: East  (X+)`
 func (lv *Level) OnUseItem(x, y, z *int32, face byte, item *types.Item) (canceled bool) {
-	if !item.IsBlock() {
+	if !item.IsBlock() || *y > 127 {
 		return
 	}
 	switch face {
