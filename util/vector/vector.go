@@ -1,6 +1,25 @@
-package util
+// Package vector provides position/direction things for lav7.
+package vector
 
 import "math"
+
+// Side indicators
+const (
+	SideDown  = iota // Y-
+	SideUp           // Y+
+	SideNorth        // Z-
+	SideSouth        // Z+
+	SideWest         // X-
+	SideEast         // X+
+)
+
+// Direction indicators
+const (
+	South = iota
+	West
+	North
+	East
+)
 
 // Vector2 is a X-Y vector, containing 2nd-dimension position.
 type Vector2 struct {
@@ -20,7 +39,7 @@ func (v Vector2) Vector3() Vector3 {
 	}
 }
 
-// Vector2 is a X-Y-Z vector, containing 3rd-dimension position.
+// Vector3 is a X-Y-Z vector, containing 3rd-dimension position.
 type Vector3 struct {
 	X, Y, Z float32
 }

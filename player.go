@@ -13,6 +13,7 @@ import (
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
 	"github.com/L7-MCPE/lav7/util/buffer"
+	"github.com/L7-MCPE/lav7/util/vector"
 )
 
 // ChunkRadius is a chunk radius that the player can handle.
@@ -41,7 +42,7 @@ type Player struct {
 	Skin     []byte
 	SkinName string
 
-	Position            util.Vector3
+	Position            vector.Vector3
 	Level               *Level
 	Yaw, BodyYaw, Pitch float32
 
@@ -93,6 +94,15 @@ func (p *Player) process() {
 				if _, ok := chunkHold[cc]; ok {
 					delete(chunkHold, cc)
 				} else {
+					p.fastChunks[cc].Mutex().Lock()
+					if p.fastChunks[cc].Refs <= 1 {
+						p.Level.ChunkMutex.Lock()
+						p.Level.CleanQueue[cc] = struct{}{}
+						p.Level.ChunkMutex.Unlock()
+					} else {
+						p.fastChunks[cc].Refs--
+					}
+					p.fastChunks[cc].Mutex().Unlock()
 					delete(p.fastChunks, cc)
 				}
 			}
@@ -108,6 +118,12 @@ func (p *Player) process() {
 				p.fastChunkMutex.Unlock()
 				break
 			}
+			p.Level.ChunkMutex.Lock()
+			delete(p.Level.CleanQueue, [2]int32{c.X, c.Z})
+			p.Level.ChunkMutex.Unlock()
+			c.Chunk.Mutex().Lock()
+			c.Chunk.Refs++
+			c.Chunk.Mutex().Unlock()
 			p.fastChunks[[2]int32{c.X, c.Z}] = c.Chunk
 			p.fastChunkMutex.Unlock()
 			delete(p.pending, [2]int32{c.X, c.Z})
@@ -242,7 +258,7 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 		p.Secret = pk.ClientSecret
 		p.SkinName = pk.SkinName
 		p.Skin = pk.Skin
-		p.Position = util.Vector3{X: 0, Y: 128, Z: 0}
+		p.Position = vector.Vector3{X: 0, Y: 128, Z: 0}
 
 		p.SendPacket(&proto.StartGame{
 			Seed:      0xffffffff, // -1

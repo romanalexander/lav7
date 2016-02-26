@@ -24,7 +24,9 @@ type Chunk struct {
 	SkyLightData [16 * 16 * 64]byte // Nibbles
 	HeightMap    [16 * 16]byte
 	BiomeData    [16 * 16 * 4]byte // Uints
-	mutex        util.RWLocker
+
+	Refs    uint64
+	RWMutex util.RWLocker
 }
 
 // FallbackChunk is a chunk to be returned if level provider fails to load chunk from file.
@@ -155,10 +157,10 @@ func (c *Chunk) PopulateHeight() {
 
 // Mutex returns chunk's RW mutex.
 func (c *Chunk) Mutex() util.RWLocker {
-	if c.mutex == nil {
-		c.mutex = util.NewRWMutex()
+	if c.RWMutex == nil {
+		c.RWMutex = util.NewRWMutex()
 	}
-	return c.mutex
+	return c.RWMutex
 }
 
 // FullChunkData returns full chunk payload for FullChunkDataPacket. Order is layered.

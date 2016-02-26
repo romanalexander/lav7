@@ -19,7 +19,7 @@ type ExperimentalGenerator struct {
 
 // Init implements gen.Generator interface.
 func (eg *ExperimentalGenerator) Init() {
-	eg.Seed = 10
+	eg.Seed = 108
 }
 
 // Gen implements gen.Generator interface.
@@ -28,7 +28,7 @@ func (eg *ExperimentalGenerator) Gen(cx, cz int32) *types.Chunk {
 	chunk.Mutex().Lock()
 	defer chunk.Mutex().Unlock()
 
-	rd := rand.New(rand.NewSource(eg.Seed)).Float64() * 256
+	rd := rand.New(rand.NewSource(eg.Seed)).Float64()
 	rcx, rcz := cx<<4, cz<<4
 	var stage [18][18]float64
 	for x := -1; x < 17; x++ {
@@ -36,7 +36,7 @@ func (eg *ExperimentalGenerator) Gen(cx, cz int32) *types.Chunk {
 		n1 := noise1dx(rx)
 		n2 := noise1d(rx)
 		for z := -1; z < 17; z++ {
-			rz := rd + float64(rcz) + float64(z)
+			rz := -rd + float64(rcz) + float64(z)
 			stage[x+1][z+1] = noise16(n1, n2, rx, rz)
 		}
 	}

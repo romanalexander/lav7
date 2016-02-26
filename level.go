@@ -10,6 +10,7 @@ import (
 	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util"
+	"github.com/L7-MCPE/lav7/util/vector"
 )
 
 const tickDuration = time.Millisecond * 50
@@ -31,6 +32,8 @@ type Level struct {
 	genTask    chan genRequest
 	Gen        func(int32, int32) *types.Chunk
 
+	CleanQueue map[[2]int32]struct{}
+
 	Ticker *time.Ticker
 	Stop   chan struct{}
 }
@@ -43,6 +46,7 @@ func (lv *Level) Init(pv format.Provider) {
 	lv.Ticker = time.NewTicker(tickDuration)
 	lv.Stop = make(chan struct{}, 1)
 	lv.genTask = make(chan genRequest, 512)
+	lv.CleanQueue = make(map[[2]int32]struct{})
 	pv.Init(lv.Name)
 	log.Printf("* level: generating %d workers for chunk gen", numWorkers)
 	for i := 0; i < numWorkers; i++ {
@@ -83,32 +87,22 @@ func (lv *Level) genWorker() {
 }
 
 // OnUseItem handles UseItemPacket and determines position to update block position.
-// Note: Value of x, y, z could be changed
-//
-// Face direction:
-//
-//     0: Down  (Y-)
-//     1: Up    (Y+)
-//     2: North (Z-)
-//     3: South (Z+)
-//     4: West  (X-)
-//     5: East  (X+)`
 func (lv *Level) OnUseItem(p *Player, x, y, z int32, face byte, item *types.Item) {
 	if !item.IsBlock() {
 		return
 	}
 	switch face {
-	case 0:
+	case vector.SideDown:
 		y--
-	case 1:
+	case vector.SideUp:
 		y++
-	case 2:
+	case vector.SideNorth:
 		z--
-	case 3:
+	case vector.SideSouth:
 		z++
-	case 4:
+	case vector.SideWest:
 		x--
-	case 5:
+	case vector.SideEast:
 		x++
 	case 255:
 		return
@@ -118,20 +112,23 @@ func (lv *Level) OnUseItem(p *Player, x, y, z int32, face byte, item *types.Item
 	}
 	if f := lv.GetBlock(x, y, z); f == 0 {
 		lv.Set(x, y, z, item.Block())
-		p.BroadcastOthers(&proto.UpdateBlock{
-			BlockRecords: []proto.BlockRecord{
-				{
-					X: uint32(x),
-					Y: byte(y),
-					Z: uint32(z),
-					Block: types.Block{
-						ID:   byte(item.ID),
-						Meta: byte(item.Meta),
-					},
-					Flags: proto.UpdateAllPriority,
+		records := []proto.BlockRecord{
+			{
+				X: uint32(x),
+				Y: byte(y),
+				Z: uint32(z),
+				Block: types.Block{
+					ID:   byte(item.ID),
+					Meta: byte(0),
 				},
+				Flags: proto.UpdateAllPriority,
 			},
+		}
+		lv.updateSides(x, y, z, &records)
+		BroadcastPacket(&proto.UpdateBlock{
+			BlockRecords: records,
 		})
+		p.SendMessage(fmt.Sprintf("Face: %d", face))
 	} else {
 		p.SendMessage(fmt.Sprintf("Block %d(%s) already exists on x:%d, y:%d, z: %d", f, types.ID(f), x, y, z))
 		p.SendPacket(&proto.UpdateBlock{
@@ -146,6 +143,10 @@ func (lv *Level) OnUseItem(p *Player, x, y, z int32, face byte, item *types.Item
 			},
 		})
 	}
+}
+
+func (lv *Level) updateSides(x, y, z int32, record *[]proto.BlockRecord) {
+	// TODO
 }
 
 // ChunkExists returns if the chunk is loaded on the given chunk coordinates.
@@ -229,6 +230,17 @@ func (lv *Level) UnloadChunk(cx, cz int32, save bool) error {
 		return nil
 	}
 	return fmt.Errorf("Chunk %d:%d is not loaded", cx, cz)
+}
+
+// Clean unloads all 'unused' chunks from memory.
+func (lv *Level) Clean() (cnt int) {
+	lv.ChunkMutex.Lock()
+	defer lv.ChunkMutex.Unlock()
+	cnt = len(lv.CleanQueue)
+	for k := range lv.CleanQueue {
+		lv.UnloadChunk(k[0], k[1], true)
+	}
+	return
 }
 
 // Save saves all loaded chunks on memory.

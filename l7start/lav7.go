@@ -15,7 +15,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/L7-MCPE/lav7"
@@ -117,25 +116,26 @@ func initLevel(genRadius int32, genname string, img string, format string) {
 	p.Init(lav7.GetDefaultLevel().Name)
 	lav7.GetDefaultLevel().Init(p)
 	lav7.GetDefaultLevel().Gen = g.Gen
-	// log.Printf("Level init done")
-
-	log.Printf("Level init done. Preparing chunks(initial radius: %d)", genRadius)
-	chunks := int((genRadius*2 + 1) * (genRadius*2 + 1))
-	wg := new(sync.WaitGroup)
-	wg.Add(chunks)
-	level := lav7.GetDefaultLevel()
-	for x := -genRadius; x <= genRadius; x++ {
-		for z := -genRadius; z <= genRadius; z++ {
-			go func(x, z int32) {
-				if level.GetChunk(x, z) == nil {
-					<-level.CreateChunk(x, z)
-				}
-				wg.Done()
-			}(x, z)
+	log.Printf("Level init done.")
+	/*
+		log.Printf("Level init done. Preparing chunks(initial radius: %d)", genRadius)
+		chunks := int((genRadius*2 + 1) * (genRadius*2 + 1))
+		wg := new(sync.WaitGroup)
+		wg.Add(chunks)
+		level := lav7.GetDefaultLevel()
+		for x := -genRadius; x <= genRadius; x++ {
+			for z := -genRadius; z <= genRadius; z++ {
+				go func(x, z int32) {
+					if level.GetChunk(x, z) == nil {
+						<-level.CreateChunk(x, z)
+					}
+					wg.Done()
+				}(x, z)
+			}
 		}
-	}
-	wg.Wait()
-	log.Printf("%d chunks cached in memory.", chunks)
+		wg.Wait()
+		log.Printf("%d chunks cached in memory.", chunks)
+	*/
 }
 
 func initRaknet() {
