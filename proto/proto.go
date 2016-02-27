@@ -11,6 +11,7 @@ import (
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
+// Packet IDs
 const (
 	LoginHead byte = 0x8f + iota
 	PlayStatusHead
@@ -69,6 +70,7 @@ const (
 	_ // SpawnExperienceOrb
 	_ // ClientboundMapItemData
 	_ // MapInfoRequest
+	_ // RequestChunkRadius
 	_ // ChunkRadiusUpdate
 	_ // ItemFrameDrop
 	_ // ReplaceSelectedItem
@@ -128,13 +130,14 @@ var packets = map[byte]Packet{
 	PlayerListHead:          new(PlayerList),
 }
 
+// Packet is an interface for decoding/encoding MCPE packets.
 type Packet interface {
 	Pid() byte
 	Read(*bytes.Buffer)
 	Write() *bytes.Buffer
 }
 
-// GetPackets returns Packet struct with given pid.
+// GetPacket returns Packet struct with given pid.
 func GetPacket(pid byte) Packet {
 	pk, _ := packets[pid]
 	return pk
@@ -176,6 +179,7 @@ func (i Login) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	LoginSuccess uint32 = iota
 	LoginFailedClient
@@ -263,6 +267,7 @@ func (i Batch) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	TextTypeRaw byte = iota
 	TextTypeChat
@@ -322,6 +327,7 @@ func (i Text) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	DayTime     = 0
 	SunsetTime  = 12000
@@ -604,6 +610,7 @@ func (i MoveEntity) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	ModeNormal   byte = 0
 	ModeReset    byte = 1
@@ -682,6 +689,7 @@ func (i RemoveBlock) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	UpdateNone byte = (1 << iota) >> 1
 	UpdateNeighbors
@@ -805,6 +813,7 @@ func (i Explode) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	EventSoundClick            = 1000
 	EventSoundClickFail        = 1001
@@ -900,6 +909,7 @@ func (i BlockEvent) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	EventHurtAnimation byte = iota + 2
 	EventDeathAnimation
@@ -942,6 +952,7 @@ func (i EntityEvent) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	EffectAdd byte = iota + 1
 	EffectModify
@@ -951,8 +962,8 @@ const (
 // MobEffect needs to be documented.
 type MobEffect struct {
 	EntityID  uint64
-	EventId   byte
-	EffectId  byte
+	EventID   byte
+	EffectID  byte
 	Amplifier byte
 	Particles bool
 	Duration  uint32
@@ -964,8 +975,8 @@ func (i MobEffect) Pid() byte { return MobEffectHead }
 // Read implements proto.Packet interface.
 func (i *MobEffect) Read(buf *bytes.Buffer) {
 	i.EntityID = buffer.ReadLong(buf)
-	i.EventId = buffer.ReadByte(buf)
-	i.EffectId = buffer.ReadByte(buf)
+	i.EventID = buffer.ReadByte(buf)
+	i.EffectID = buffer.ReadByte(buf)
 	i.Amplifier = buffer.ReadByte(buf)
 	i.Particles = buffer.ReadBool(buf)
 	i.Duration = buffer.ReadInt(buf)
@@ -975,8 +986,8 @@ func (i *MobEffect) Read(buf *bytes.Buffer) {
 func (i MobEffect) Write() *bytes.Buffer {
 	buf := new(bytes.Buffer)
 	buffer.WriteLong(buf, i.EntityID)
-	buffer.WriteByte(buf, i.EventId)
-	buffer.WriteByte(buf, i.EffectId)
+	buffer.WriteByte(buf, i.EventID)
+	buffer.WriteByte(buf, i.EffectID)
 	buffer.WriteByte(buf, i.Amplifier)
 	buffer.WriteBool(buf, i.Particles)
 	buffer.WriteInt(buf, i.Duration)
@@ -1108,6 +1119,7 @@ func (i UseItem) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	ActionStartBreak uint32 = iota
 	ActionAbortBreak
@@ -1487,6 +1499,7 @@ func (i ContainerSetData) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	InventoryWindow byte = 0
 	ArmorWindow     byte = 0x78
@@ -1615,6 +1628,7 @@ func (i BlockEntityData) Write() *bytes.Buffer {
 	return buf
 }
 
+// Packet-specific constants
 const (
 	OrderColumns byte = 0
 	OrderLayered byte = 1
@@ -1692,6 +1706,7 @@ type PlayerListEntry struct {
 	Skin               []byte
 }
 
+// Packet-specific constants
 const (
 	PlayerListRemove byte = 0 // UUID only
 	PlayerListAdd    byte = 1 // Everything!

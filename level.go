@@ -288,6 +288,8 @@ func (lv *Level) SetBlockMeta(x, y, z int32, b byte) {
 // The struct will contain block ID/meta.
 func (lv Level) Get(x, y, z int32) types.Block {
 	c := lv.GetChunk(x>>4, z>>4)
+	c.Mutex().Lock()
+	defer c.Mutex().Unlock()
 	return types.Block{
 		ID:   c.GetBlock(byte(x&0xf), byte(y), byte(z&0xf)),
 		Meta: c.GetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf)),
@@ -297,6 +299,8 @@ func (lv Level) Get(x, y, z int32) types.Block {
 // Set sets block to given types.Block struct on given coordinates.
 func (lv Level) Set(x, y, z int32, block types.Block) {
 	c := lv.GetChunk(x>>4, z>>4)
+	c.Mutex().Lock()
+	defer c.Mutex().Unlock()
 	c.SetBlock(byte(x&0xf), byte(y), byte(z&0xf), block.ID)
 	c.SetBlockMeta(byte(x&0xf), byte(y), byte(z&0xf), block.Meta)
 }
