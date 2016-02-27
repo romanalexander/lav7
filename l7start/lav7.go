@@ -18,8 +18,7 @@ import (
 	"time"
 
 	"github.com/L7-MCPE/lav7"
-	_ "github.com/L7-MCPE/lav7/format/dummy"
-	_ "github.com/L7-MCPE/lav7/format/vilan"
+	"github.com/L7-MCPE/lav7/format"
 	"github.com/L7-MCPE/lav7/gen"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/util"
@@ -31,7 +30,7 @@ func main() {
 	port := flag.Uint64("port", 19132, "sets server port to given value")
 	img := flag.String("img", "none", "use experimental image chunk creator with given image")
 	genname := flag.String("gen", "flat", "uses given level generator")
-	format := flag.String("fmt", "vilan", "set level format explicitly")
+	lvformat := flag.String("fmt", "vilan", "set level format explicitly")
 	flag.Parse()
 
 	if *ppr {
@@ -61,7 +60,7 @@ func main() {
 	} else {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
-	initLevel(5, *genname, *img, *format)
+	initLevel(5, *genname, *img, *lvformat)
 	initRaknet()
 	startLevel()
 	startRouter(uint16(*port))
@@ -71,7 +70,7 @@ func main() {
 	lav7.HandleCommand()
 }
 
-func initLevel(genRadius int32, genname string, img string, format string) {
+func initLevel(genRadius int32, genname string, img string, lvformat string) {
 	var g gen.Generator
 	if img != "none" {
 		log.Print("* Using EXPERIMENTAL image chunk generator")
@@ -108,8 +107,8 @@ func initLevel(genRadius int32, genname string, img string, format string) {
 	log.Println("Generator type:", reflect.TypeOf(g))
 	g.Init()
 	log.Println("Generator init done. Initializing level...")
-	log.Println("Level format type:", format)
-	p := lav7.GetProvider(format)
+	log.Println("Level format type:", lvformat)
+	p := format.GetProvider(lvformat)
 	if p == nil {
 		log.Fatalln("Error: cannot find the format provider from server.")
 	}

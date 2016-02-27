@@ -70,8 +70,8 @@ const (
 	_ // SpawnExperienceOrb
 	_ // ClientboundMapItemData
 	_ // MapInfoRequest
-	_ // RequestChunkRadius
-	_ // ChunkRadiusUpdate
+	RequestChunkRadiusHead
+	ChunkRadiusUpdateHead
 	_ // ItemFrameDrop
 	_ // ReplaceSelectedItem
 )
@@ -128,6 +128,8 @@ var packets = map[byte]Packet{
 	SetDifficultyHead:       new(SetDifficulty),
 	SetPlayerGametypeHead:   new(SetPlayerGametype),
 	PlayerListHead:          new(PlayerList),
+	RequestChunkRadiusHead:  new(RequestChunkRadius),
+	ChunkRadiusUpdateHead:   new(ChunkRadiusUpdate),
 }
 
 // Packet is an interface for decoding/encoding MCPE packets.
@@ -1757,5 +1759,45 @@ func (i PlayerList) Write() *bytes.Buffer {
 		buffer.WriteShort(buf, uint16(len(entry.Skin)))
 		buffer.Write(buf, entry.Skin)
 	}
+	return buf
+}
+
+// RequestChunkRadius needs to be documented.
+type RequestChunkRadius struct {
+	Radius uint32
+}
+
+// Pid implements proto.Packet interface.
+func (i RequestChunkRadius) Pid() byte { return RequestChunkRadiusHead }
+
+// Read implements proto.Packet interface.
+func (i *RequestChunkRadius) Read(buf *bytes.Buffer) {
+	i.Radius = buffer.ReadInt(buf)
+}
+
+// Write implements proto.Packet interface.
+func (i RequestChunkRadius) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.Radius)
+	return buf
+}
+
+// ChunkRadiusUpdate needs to be documented.
+type ChunkRadiusUpdate struct {
+	Radius uint32
+}
+
+// Pid implements proto.Packet interface.
+func (i ChunkRadiusUpdate) Pid() byte { return ChunkRadiusUpdateHead }
+
+// Read implements proto.Packet interface.
+func (i *ChunkRadiusUpdate) Read(buf *bytes.Buffer) {
+	i.Radius = buffer.ReadInt(buf)
+}
+
+// Write implements proto.Packet interface.
+func (i ChunkRadiusUpdate) Write() *bytes.Buffer {
+	buf := new(bytes.Buffer)
+	buffer.WriteInt(buf, i.Radius)
 	return buf
 }

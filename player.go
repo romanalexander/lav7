@@ -16,9 +16,6 @@ import (
 	"github.com/L7-MCPE/lav7/util/vector"
 )
 
-// ChunkRadius is a chunk radius that the player can handle.
-const ChunkRadius int32 = 5
-
 // PlayerCallback is a struct for delivering callbacks to other player goroutines;
 // It is usually used to bypass race issues.
 type PlayerCallback struct {
@@ -50,6 +47,7 @@ type Player struct {
 
 	fastChunks     map[[2]int32]*types.Chunk
 	fastChunkMutex util.Locker
+	chunkRadius    int32
 	chunkRequest   chan chunkRequest
 	chunkStop      chan struct{}
 	chunkNotify    chan types.ChunkDelivery
@@ -84,8 +82,8 @@ func (p *Player) process() {
 		case <-p.updateTicker.C:
 			cx, cz := int32(p.Position.X)>>4, int32(p.Position.Z)>>4
 			chunkHold := make(map[[2]int32]struct{})
-			for ccx := cx - ChunkRadius; ccx <= cx+ChunkRadius; ccx++ {
-				for ccz := cz - ChunkRadius; ccz <= cz+ChunkRadius; ccz++ {
+			for ccx := cx - p.chunkRadius; ccx <= cx+p.chunkRadius; ccx++ {
+				for ccz := cz - p.chunkRadius; ccz <= cz+p.chunkRadius; ccz++ {
 					chunkHold[[2]int32{ccx, ccz}] = struct{}{}
 				}
 			}
@@ -130,8 +128,8 @@ func (p *Player) process() {
 			p.sendChunk(c)
 			/*
 				case <-resendTicker.C:
-					for cx := int32(p.Position.X) - ChunkRadius; cx <= int32(p.Position.X)+ChunkRadius; cx++ {
-						for cz := int32(p.Position.Z) - ChunkRadius; cz <= int32(p.Position.Z)+ChunkRadius; cz++ {
+					for cx := int32(p.Position.X) - p.chunkRadius; cx <= int32(p.Position.X)+p.chunkRadius; cx++ {
+						for cz := int32(p.Position.Z) - p.chunkRadius; cz <= int32(p.Position.Z)+p.chunkRadius; cz++ {
 							p.requestChunk([2]int32{cx, cz})
 						}
 					}
@@ -145,10 +143,10 @@ func (p *Player) process() {
 func (p *Player) SendNearChunk(wg *sync.WaitGroup) {
 	cx, cz := int32(p.Position.X)>>4, int32(p.Position.Z)>>4
 	if wg != nil {
-		wg.Add(int(ChunkRadius*2+1) * int(ChunkRadius*2+1))
+		wg.Add(int(p.chunkRadius*2+1) * int(p.chunkRadius*2+1))
 	}
-	for ccx := cx - ChunkRadius; ccx <= cx+ChunkRadius; ccx++ {
-		for ccz := cz - ChunkRadius; ccz <= cz+ChunkRadius; ccz++ {
+	for ccx := cx - p.chunkRadius; ccx <= cx+p.chunkRadius; ccx++ {
+		for ccz := cz - p.chunkRadius; ccz <= cz+p.chunkRadius; ccz++ {
 			p.requestChunk([2]int32{ccx, ccz}, wg)
 		}
 	}
@@ -319,6 +317,10 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 		px, py, pz := int32(pk.X), int32(pk.Y), int32(pk.Z)
 		p.Level.OnUseItem(p, px, py, pz, pk.Face, pk.Item)
 		//spew.Dump(pk)
+
+	case *proto.RequestChunkRadius:
+		p.chunkRadius = int32(pk.(*proto.RequestChunkRadius).Radius)
+
 	case *proto.ContainerSetSlot:
 		//pk := pk.(*proto.ContainerSetSlot)
 		//spew.Dump(pk)

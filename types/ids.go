@@ -1140,6 +1140,8 @@ var nameMap = map[ID]string{
 	BeetrootSoup:       "BeetrootSoup",       // 459
 }
 
+// StringID returns item ID with given name.
+// If there's no such item, returns -1(65535).
 func StringID(name string) ID {
 	if id, ok := idMap[name]; ok {
 		return id

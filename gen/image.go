@@ -12,7 +12,7 @@ func init() {
 
 // ImageGenerator sets biome color to given image fixels.
 type ImageGenerator struct {
-	Cache         *types.Chunk
+	Cache         types.Chunk
 	Image         image.Image
 	Width, Height int32
 }
@@ -30,7 +30,7 @@ func (s *ImageGenerator) Init() {
 		}
 	}
 	chunk.PopulateHeight()
-	s.Cache = chunk
+	s.Cache = *chunk
 }
 
 // Gen implements gen.Generator interface.

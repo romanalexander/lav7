@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// MutexDebug is a flag for debugging mutex tracers.
 var MutexDebug bool
 
 // NewMutex returns new Locker; sync.Mutex or MutexTracer.

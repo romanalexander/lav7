@@ -1,11 +1,4 @@
-// Package vilan implements simple world format for lav7 servers.
-//
-// Vilan splits worlds into section files, containing 16(4*4) chunks.
-// Filename format is 'section.sectionX.sectionZ.v'.
-//
-// Each sections' chunk structures are same as dummy format.
-// There are no tile entity/NBT support for now.
-package vilan
+package format
 
 import (
 	"bytes"
@@ -14,14 +7,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util/buffer"
 	"github.com/L7-MCPE/lav7/util/try"
 )
 
 func init() {
-	lav7.RegisterProvider(new(Vilan))
+	RegisterProvider(new(Vilan))
 }
 
 // Vilan is a improved version of Dummy, grouping 16 chunks into a single section.

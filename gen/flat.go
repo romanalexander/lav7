@@ -8,7 +8,7 @@ func init() {
 
 // FlatGenerator generates flat MCPE chunks.
 type FlatGenerator struct {
-	Cache *types.Chunk
+	Cache types.Chunk
 }
 
 // Init implements gen.Generator interface.
@@ -25,7 +25,7 @@ func (s *FlatGenerator) Init() {
 		}
 	}
 	chunk.PopulateHeight()
-	s.Cache = chunk
+	s.Cache = *chunk
 }
 
 // Gen implements gen.Generator interface.

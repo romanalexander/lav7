@@ -26,7 +26,7 @@ var levelGenerators = map[string]Generator{}
 // Generator name must end with "Generator".
 func RegisterGenerator(g Generator) {
 	typname := reflect.TypeOf(g).String()
-	if typname[len(typname)-9:len(typname)] != "Generator" {
+	if typname[len(typname)-9:] != "Generator" {
 		panic("Invalid generator name: " + typname)
 	}
 	typsl := strings.Split(typname, ".")

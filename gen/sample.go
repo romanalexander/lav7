@@ -12,7 +12,7 @@ func init() {
 
 // SampleGenerator is a simple generator concept.
 type SampleGenerator struct {
-	Cache *types.Chunk
+	Cache types.Chunk
 }
 
 // Init implements gen.Generator interface.
@@ -28,7 +28,7 @@ func (s *SampleGenerator) Init() {
 		}
 	}
 	chunk.PopulateHeight()
-	s.Cache = chunk
+	s.Cache = *chunk
 }
 
 // Gen implements gen.Generator interface.

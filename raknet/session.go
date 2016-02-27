@@ -20,7 +20,7 @@ const chanBufsize = 256
 
 // MaxPingTries defines max retry count on ping timeout.
 // If ping timeouts MaxPingTries + 1 times, session will be closed.
-const MaxPingTries uint64 = 2
+const MaxPingTries uint64 = 3
 
 // RecoveryTimeout defines how long packets can live on recoery queue.
 // Once the packet is sent, the packet will be on recoery queue in RecoveryTimeout duration.
@@ -31,7 +31,7 @@ var Sessions map[string]*Session
 
 // SessionLock is a explicit locker for Sessions map.
 var SessionLock = new(sync.Mutex)
-var timeout = time.Millisecond * 1500
+var timeout = time.Millisecond * 2000
 
 // GetSession returns session with given identifier if exists, or creates new one.
 func GetSession(address *net.UDPAddr, sendChannel chan Packet,

@@ -38,8 +38,9 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *bytes.Buffer) {
 
 	p.fastChunks = make(map[[2]int32]*types.Chunk)
 	p.fastChunkMutex = util.NewMutex()
+	p.chunkRadius = 6
 	p.chunkStop = make(chan struct{}, 1)
-	p.chunkRequest = make(chan chunkRequest, (ChunkRadius * ChunkRadius * 2))
+	p.chunkRequest = make(chan chunkRequest, 256)
 	p.chunkNotify = make(chan types.ChunkDelivery, 16)
 
 	p.inventory = new(PlayerInventory)

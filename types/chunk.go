@@ -34,7 +34,7 @@ var FallbackChunk = *new(Chunk)
 
 // CopyFrom gets everything from given chunk, and writes to the chunk instance.
 // Mutex is not shared with given chunk. You don't need to RLock the copying chunk.
-func (c *Chunk) CopyFrom(chunk *Chunk) {
+func (c *Chunk) CopyFrom(chunk Chunk) {
 	chunk.Mutex().RLock()
 	defer chunk.Mutex().RUnlock()
 	copy(c.BlockData[:], chunk.BlockData[:])

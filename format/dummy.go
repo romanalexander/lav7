@@ -1,10 +1,4 @@
-/*
- Package dummy provides an example for writing level format provider.
-
- This format saves each chunk in separate file, writing raw block id/meta/height map/skylight data, etc.
- Use of this format in production server is not recommended.
-*/
-package dummy
+package format
 
 import (
 	"bytes"
@@ -14,13 +8,12 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/L7-MCPE/lav7"
 	"github.com/L7-MCPE/lav7/types"
 	"github.com/L7-MCPE/lav7/util/buffer"
 )
 
 func init() {
-	lav7.RegisterProvider(new(Dummy))
+	RegisterProvider(new(Dummy))
 }
 
 // Dummy is a 'dumb' level format which saves FullChunkData into single file.
