@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/L7-MCPE/lav7/proto"
@@ -228,7 +229,7 @@ func (p *Player) handleDataPacket(pk proto.Packet) (err error) {
 			return
 		}
 		iteratorLock.Lock()
-		if len(Players) >= MaxPlayers {
+		if len(Players) >= int(atomic.LoadInt32(&raknet.MaxPlayers)) {
 			iteratorLock.Unlock()
 			p.disconnect("Server is full!")
 			return

@@ -6,10 +6,6 @@ import "sync"
 const (
 	// Version is a version of this server.
 	Version = "1.1.0 alpha-dev"
-	// ServerName contains human readable server name
-	ServerName = "lav7 - lightweight MCPE server"
-	// MaxPlayers is count of maximum available players
-	MaxPlayers = 20
 )
 
 // GitCommit is a git commit hash for this project.

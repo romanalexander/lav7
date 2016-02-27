@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -15,9 +16,11 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/L7-MCPE/lav7"
+	"github.com/L7-MCPE/lav7/config"
 	"github.com/L7-MCPE/lav7/format"
 	"github.com/L7-MCPE/lav7/gen"
 	"github.com/L7-MCPE/lav7/raknet"
@@ -25,12 +28,20 @@ import (
 )
 
 func main() {
+
+	cfg, err := os.Open("lav7.properties")
+	if os.IsNotExist(err) {
+		err := ioutil.WriteFile("lav7.properties", []byte(config.DefaultConfig), 0644)
+		if err != nil {
+			panic(err)
+		}
+		main()
+	} else if err != nil {
+		log.Fatalln("Error while opening properties file:", err)
+	}
+
 	ppr := flag.Bool("pprof", false, "starts pprof debug server on :8080")
 	mutex := flag.Bool("mutex", false, "trace mutexes for debugging")
-	port := flag.Uint64("port", 19132, "sets server port to given value")
-	img := flag.String("img", "none", "use experimental image chunk creator with given image")
-	genname := flag.String("gen", "flat", "uses given level generator")
-	lvformat := flag.String("fmt", "vilan", "set level format explicitly")
 	flag.Parse()
 
 	if *ppr {
@@ -45,10 +56,7 @@ func main() {
 		util.MutexDebug = false // I know a zero value for bool is false, but setting anyway for certainty
 	}
 
-	if *port > 65535 || *port == 0 {
-		log.Printf("warning: port %d is invalid. Server will run on :19132.", *port)
-		*port = 19132
-	}
+	config.Parse(cfg)
 
 	log.Printf("Starting lav7 version %s(git commit %s)", lav7.Version, lav7.GitCommit)
 	log.Println("lav7 is licensed under the GPLv3 License; see http://rawgit.com/L7-MCPE/lav7/master/LICENSE.txt")
@@ -60,21 +68,21 @@ func main() {
 	} else {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
-	initLevel(5, *genname, *img, *lvformat)
+	initLevel(config.Generator, config.GeneratorArgs, config.Format)
 	initRaknet()
 	startLevel()
-	startRouter(uint16(*port))
+	startRouter(config.Port)
 
 	log.Println("All done! Elapsed time:", time.Since(start).Seconds(), "seconds")
 	log.Println("Server is ready. Type 'stop' to stop server.")
 	lav7.HandleCommand()
 }
 
-func initLevel(genRadius int32, genname string, img string, lvformat string) {
+func initLevel(genname string, arg string, lvformat string) {
 	var g gen.Generator
-	if img != "none" {
+	if lvformat == "img" {
 		log.Print("* Using EXPERIMENTAL image chunk generator")
-		file, err := os.Open(img)
+		file, err := os.Open(arg)
 		if err != nil {
 			log.Fatalln("Error while opening image:", err)
 		}
@@ -116,30 +124,11 @@ func initLevel(genRadius int32, genname string, img string, lvformat string) {
 	lav7.GetDefaultLevel().Init(p)
 	lav7.GetDefaultLevel().Gen = g.Gen
 	log.Printf("Level init done.")
-	/*
-		log.Printf("Level init done. Preparing chunks(initial radius: %d)", genRadius)
-		chunks := int((genRadius*2 + 1) * (genRadius*2 + 1))
-		wg := new(sync.WaitGroup)
-		wg.Add(chunks)
-		level := lav7.GetDefaultLevel()
-		for x := -genRadius; x <= genRadius; x++ {
-			for z := -genRadius; z <= genRadius; z++ {
-				go func(x, z int32) {
-					if level.GetChunk(x, z) == nil {
-						<-level.CreateChunk(x, z)
-					}
-					wg.Done()
-				}(x, z)
-			}
-		}
-		wg.Wait()
-		log.Printf("%d chunks cached in memory.", chunks)
-	*/
 }
 
 func initRaknet() {
-	raknet.ServerName = lav7.ServerName
-	raknet.MaxPlayers = lav7.MaxPlayers
+	raknet.ServerName = config.ServerName
+	atomic.StoreInt32(&raknet.MaxPlayers, config.MaxPlayers)
 }
 
 func startLevel() {

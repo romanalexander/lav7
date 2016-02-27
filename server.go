@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/L7-MCPE/lav7/config"
 	"github.com/L7-MCPE/lav7/proto"
 	"github.com/L7-MCPE/lav7/raknet"
 	"github.com/L7-MCPE/lav7/types"
@@ -38,7 +39,7 @@ func RegisterPlayer(addr *net.UDPAddr) (handlerChan chan<- *bytes.Buffer) {
 
 	p.fastChunks = make(map[[2]int32]*types.Chunk)
 	p.fastChunkMutex = util.NewMutex()
-	p.chunkRadius = 6
+	p.chunkRadius = config.ChunkRadius
 	p.chunkStop = make(chan struct{}, 1)
 	p.chunkRequest = make(chan chunkRequest, 256)
 	p.chunkNotify = make(chan types.ChunkDelivery, 16)
